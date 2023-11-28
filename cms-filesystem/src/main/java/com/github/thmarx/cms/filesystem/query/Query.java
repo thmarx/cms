@@ -22,6 +22,7 @@ package com.github.thmarx.cms.filesystem.query;
  * #L%
  */
 
+import com.github.thmarx.cms.api.content.Page;
 import com.github.thmarx.cms.filesystem.MetaData;
 import static com.github.thmarx.cms.filesystem.query.QueryUtil.filtered;
 import static com.github.thmarx.cms.filesystem.query.QueryUtil.sorted;
@@ -38,7 +39,6 @@ import java.util.function.BiFunction;
 public class Query<T> {
 
 	private final Collection<MetaData.MetaNode> nodes;
-//	public final BiFunction<MetaData.MetaNode, Integer, T> nodeMapper;
 
 	private ExcerptMapperFunction<T> nodeMapper;
 	
@@ -67,7 +67,7 @@ public class Query<T> {
 		return where(field, QueryUtil.Operator.CONTAINS, value);
 	}
 	
-	public Query<T> whereContainsNot (final String field, final Object value) {
+	public Query<T> whereNotContains (final String field, final Object value) {
 		return where(field, QueryUtil.Operator.CONTAINS_NOT, value);
 	}
 	
@@ -93,6 +93,26 @@ public class Query<T> {
 	
 	public int count() {
 		return nodes.size();
+	}
+	
+	public Page<T> page (final long page, final long size) {
+		return page((int)page, (int)size);
+	}
+	
+	public Page<T> page (final int page, final int size) {
+		int total = count();
+		int offset = (page - 1) * size;
+		
+		var filteredNodes = nodes.stream()
+				.filter(node -> !node.isDirectory())
+				.filter(MetaData::isVisible)
+				.skip(offset)
+				.limit(size)
+				.map(nodeMapper)
+				.toList();
+		
+		int totalPages = (int) Math.ceil((float) total / size);
+		return new Page<T>(filteredNodes.size(), totalPages, page, filteredNodes);
 	}
 	
 	public List<T> get(final long offset, final long size) {

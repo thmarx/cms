@@ -1,4 +1,4 @@
-package com.github.thmarx.cms.template.functions.list;
+package com.github.thmarx.cms.api.content;
 
 /*-
  * #%L
@@ -22,11 +22,26 @@ package com.github.thmarx.cms.template.functions.list;
  * #L%
  */
 
-import java.util.Map;
+import java.util.Collections;
+import java.util.List;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /**
  *
  * @author t.marx
  */
-
-public record Node (String name, String path, String content, Map<String, Object> meta) {}
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class Page<T> {
+	
+	public static final Page EMPTY = new Page(0, 0, 1, Collections.EMPTY_LIST);
+	
+	private int size;
+	private long total;
+	private int page;
+	
+	private List<T> items;
+}

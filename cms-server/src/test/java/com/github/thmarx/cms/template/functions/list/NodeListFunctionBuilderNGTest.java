@@ -22,6 +22,8 @@ package com.github.thmarx.cms.template.functions.list;
  * #L%
  */
 
+import com.github.thmarx.cms.api.content.Node;
+import com.github.thmarx.cms.api.content.Page;
 import com.github.thmarx.cms.content.ContentParser;
 import com.github.thmarx.cms.TestHelper;
 import com.github.thmarx.cms.api.markdown.MarkdownRenderer;

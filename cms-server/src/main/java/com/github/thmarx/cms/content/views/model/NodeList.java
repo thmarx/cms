@@ -1,4 +1,4 @@
-package com.github.thmarx.cms.template.functions.list;
+package com.github.thmarx.cms.content.views.model;
 
 /*-
  * #%L
@@ -22,26 +22,20 @@ package com.github.thmarx.cms.template.functions.list;
  * #L%
  */
 
-import java.util.Collections;
-import java.util.List;
-import lombok.AllArgsConstructor;
+import com.github.thmarx.cms.api.Constants;
 import lombok.Data;
-import lombok.NoArgsConstructor;
 
 /**
  *
  * @author t.marx
  */
 @Data
-@AllArgsConstructor
-@NoArgsConstructor
-public class Page<T> {
-	
-	public static final Page EMPTY = new Page(0, 0, 1, Collections.EMPTY_LIST);
-	
-	private int size;
-	private long total;
-	private int page;
-	
-	private List<T> items;
+public class NodeList {
+	private String from;
+    private String reverse;
+    private String sort;
+    private String excerpt = String.valueOf(Constants.DEFAULT_EXCERPT_LENGTH);
+    private String page = String.valueOf(Constants.DEFAULT_PAGE);
+    private String size = String.valueOf(Constants.DEFAULT_PAGE_SIZE);
+    private String index;
 }

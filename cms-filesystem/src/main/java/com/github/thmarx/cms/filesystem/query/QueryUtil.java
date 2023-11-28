@@ -40,7 +40,7 @@ import lombok.extern.slf4j.Slf4j;
  * @author t.marx
  */
 @Slf4j
-final class QueryUtil {
+public final class QueryUtil {
 	
 	public static enum Operator {
 		CONTAINS,
@@ -58,7 +58,7 @@ final class QueryUtil {
 	
 	public static Operator operator4String (final String operator) {
 		if (Strings.isNullOrEmpty(operator)) {
-			throw new RuntimeException("operator must not be empty");
+			return Operator.EQ;
 		}
 		return switch (operator) {
 			case "=" -> Operator.EQ;

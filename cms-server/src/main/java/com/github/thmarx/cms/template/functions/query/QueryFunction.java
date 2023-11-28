@@ -27,11 +27,10 @@ import com.github.thmarx.cms.filesystem.FileSystem;
 import com.github.thmarx.cms.filesystem.MetaData;
 import com.github.thmarx.cms.filesystem.query.Query;
 import com.github.thmarx.cms.template.functions.AbstractCurrentNodeFunction;
-import com.github.thmarx.cms.template.functions.list.Node;
+import com.github.thmarx.cms.api.content.Node;
 import com.github.thmarx.cms.utils.NodeUtil;
 import java.nio.file.Path;
 import java.util.function.BiFunction;
-import java.util.function.Function;
 
 /**
  *
