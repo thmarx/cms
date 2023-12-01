@@ -22,7 +22,6 @@ package com.github.thmarx.cms.server.jetty;
  * #L%
  */
 import com.github.thmarx.cms.api.ServerProperties;
-import com.github.thmarx.cms.api.media.MediaFormat;
 import com.github.thmarx.cms.media.MediaManager;
 import com.github.thmarx.cms.server.jetty.handler.JettyDefaultHandler;
 import com.github.thmarx.cms.server.jetty.handler.JettyExtensionHandler;
@@ -30,9 +29,7 @@ import com.github.thmarx.cms.server.VHost;
 import com.github.thmarx.cms.server.jetty.handler.JettyMediaHandler;
 import com.github.thmarx.cms.server.jetty.handler.JettyModuleMappingHandler;
 import java.nio.file.Path;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jetty.http.pathmap.PathSpec;

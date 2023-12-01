@@ -71,7 +71,7 @@ public class ViewParserTest {
 	@Test
 	public void test_query () throws Exception {
 		final Path currentNode = fileSystem.resolve("content/query/view.yaml");		
-		var view = ViewParser.parse(currentNode, Map.of());		
+		var view = ViewParser.parse(currentNode);		
 		Assertions.assertThat(view).isNotNull();
 	
 		
@@ -103,7 +103,7 @@ public class ViewParserTest {
 	@Test
 	public void test_nodelist () throws Exception {
 		final Path currentNode = fileSystem.resolve("content/view/view.yaml");		
-		var view = ViewParser.parse(currentNode, Map.of());		
+		var view = ViewParser.parse(currentNode);		
 		Assertions.assertThat(view).isNotNull();
 	
 		
@@ -129,7 +129,7 @@ public class ViewParserTest {
 
 	@Test
 	public void test() throws IOException, URISyntaxException {
-		var view = ViewParser.parse(Path.of(ViewParser.class.getResource("view-nodelist.yaml").toURI()), Map.of());
+		var view = ViewParser.parse(Path.of(ViewParser.class.getResource("view-nodelist.yaml").toURI()));
 		Assertions.assertThat(view.getTemplate()).isEqualTo("views/test.html");
 
 		Assertions.assertThat(view.getContent().getNodelist().getFrom()).isEqualTo("./");

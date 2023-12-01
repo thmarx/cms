@@ -31,6 +31,7 @@ import com.github.thmarx.cms.api.template.TemplateEngine;
 import com.github.thmarx.cms.template.functions.list.NodeListFunctionBuilder;
 import com.github.thmarx.cms.template.functions.navigation.NavigationFunction;
 import com.github.thmarx.cms.api.utils.SectionUtil;
+import com.github.thmarx.cms.content.views.model.View;
 import com.github.thmarx.cms.request.RequestContext;
 import com.github.thmarx.cms.template.functions.query.QueryFunction;
 import com.github.thmarx.modules.api.ModuleManager;
@@ -61,6 +62,38 @@ public class ContentRenderer {
 	
 	public String render (final Path contentFile, final RequestContext context) throws IOException {
 		return render(contentFile, context, Collections.emptyMap());
+	}
+	
+	public String renderView (final Path contentFile, final View view, final RequestContext context) throws IOException {
+		TemplateEngine.Model model = new TemplateEngine.Model(contentFile);
+		model.values.put("meta", view.getMeta());
+		
+		model.values.put("navigation", new NavigationFunction(this.fileSystem, contentFile, contentParser, context.renderContext().markdownRenderer()));
+		model.values.put("nodeList", new NodeListFunctionBuilder(fileSystem, contentFile, contentParser, context.renderContext().markdownRenderer()));
+		model.values.put("query", new QueryFunction(fileSystem, contentFile, contentParser, context.renderContext().markdownRenderer()));
+		model.values.put("requestContext", context);
+		model.values.put("theme", context.renderContext().theme());
+		model.values.put("site", siteProperties);
+		
+		model.values.put("nodes", view.getNodes(
+				fileSystem, 
+				contentFile, 
+				contentParser, 
+				context.renderContext().markdownRenderer(), 
+				context.extensions().getContext(), 
+				context.queryParameters()));
+		
+		context.extensions().getRegisterTemplateSupplier().forEach(service -> {
+			model.values.put(service.name(), service.supplier());
+		});
+
+		context.extensions().getRegisterTemplateFunctions().forEach(service -> {
+			model.values.put(service.name(), service.function());
+		});
+		
+		extendModel(model);
+		
+		return templates.get().render(view.getTemplate(), model);
 	}
 	
 	public String render (final Path contentFile, final RequestContext context, final Map<String, List<ContentRenderer.Section>> sections) throws IOException {

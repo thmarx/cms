@@ -40,6 +40,9 @@ import org.graalvm.polyglot.Context;
  */
 @Data
 public class View {
+	
+	private Map<String, Object> meta;
+	
 	private String template;
 	private Content content;
 	

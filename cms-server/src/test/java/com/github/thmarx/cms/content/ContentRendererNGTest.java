@@ -78,7 +78,7 @@ public class ContentRendererNGTest extends TemplateEngineTest {
 		var expectedHTML = """
                      <html>
                      	<head>
-                     		<title>Startseite</title>
+                     		<title>StartseiteTest</title>
                      	</head>
 						<body>
                             Und hier der Inhalt

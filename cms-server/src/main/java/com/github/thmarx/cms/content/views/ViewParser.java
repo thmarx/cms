@@ -36,7 +36,7 @@ import org.yaml.snakeyaml.Yaml;
  */
 public class ViewParser {
 	
-	public static View parse (final Path viewFile, final Map<String, Object> queryParameters) throws IOException {
+	public static View parse (final Path viewFile) throws IOException {
 		try(var input = Files.newBufferedReader(viewFile, StandardCharsets.UTF_8)) {
 			return new Yaml().loadAs(input, View.class);
 		}
