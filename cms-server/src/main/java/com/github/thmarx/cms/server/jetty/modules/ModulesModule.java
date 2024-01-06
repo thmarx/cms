@@ -27,6 +27,11 @@ import com.github.thmarx.cms.api.eventbus.EventBus;
 import com.github.thmarx.cms.api.extensions.HookSystemRegisterExtentionPoint;
 import com.github.thmarx.cms.api.extensions.MarkdownRendererProviderExtentionPoint;
 import com.github.thmarx.cms.api.extensions.TemplateEngineProviderExtentionPoint;
+import com.github.thmarx.cms.api.feature.features.DBFeature;
+import com.github.thmarx.cms.api.feature.features.EventBusFeature;
+import com.github.thmarx.cms.api.feature.features.ServerPropertiesFeature;
+import com.github.thmarx.cms.api.feature.features.SitePropertiesFeature;
+import com.github.thmarx.cms.api.feature.features.ThemeFeature;
 import com.github.thmarx.cms.api.hooks.HookSystem;
 import com.github.thmarx.cms.api.markdown.MarkdownRenderer;
 import com.github.thmarx.cms.api.module.CMSModuleContext;
@@ -86,13 +91,14 @@ public class ModulesModule extends AbstractModule {
 	@Provides
 	@Singleton
 	public CMSModuleContext moduleContext(SiteProperties siteProperties, ServerProperties serverProperties, FileDB db, EventBus eventBus, Theme theme) {
-		return new CMSModuleContext(
-				siteProperties,
-				serverProperties,
-				db,
-				eventBus,
-				theme
-		);
+		final CMSModuleContext cmsModuleContext = new CMSModuleContext();
+		cmsModuleContext.add(SitePropertiesFeature.class, new SitePropertiesFeature(siteProperties));
+		cmsModuleContext.add(ServerPropertiesFeature.class, new ServerPropertiesFeature(serverProperties));
+		cmsModuleContext.add(DBFeature.class, new DBFeature(db));
+		cmsModuleContext.add(EventBusFeature.class, new EventBusFeature(eventBus));
+		cmsModuleContext.add(ThemeFeature.class, new ThemeFeature(theme));
+		
+		return cmsModuleContext;
 	}
 
 	/**

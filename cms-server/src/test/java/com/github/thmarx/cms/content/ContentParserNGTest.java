@@ -50,7 +50,7 @@ public class ContentParserNGTest {
 		var content = contentParser.parse(Path.of("hosts/test/content/test.md"));
 		
 		Assertions.assertThat(content.meta()).containsKeys("title", "tags", "template");
-		Assertions.assertThat(content.meta().get("title")).isEqualTo("Startseite");
+		Assertions.assertThat(content.meta().get("title")).isEqualTo("StartseiteView");
 		Assertions.assertThat(content.meta().get("tags")).isInstanceOf(List.class)
 				.asList().containsExactly("eins", "zwei", "drei");
 		Assertions.assertThat(content.content()).isEqualToIgnoringWhitespace(expectedMD);

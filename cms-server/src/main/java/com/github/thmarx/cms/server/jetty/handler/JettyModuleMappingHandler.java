@@ -21,7 +21,7 @@ package com.github.thmarx.cms.server.jetty.handler;
  * <http://www.gnu.org/licenses/gpl-3.0.html>.
  * #L%
  */
-import com.github.thmarx.cms.api.extensions.JettyHttpHandlerExtensionPoint;
+import com.github.thmarx.cms.api.extensions.HttpHandlerExtensionPoint;
 import com.github.thmarx.cms.api.extensions.Mapping;
 import com.github.thmarx.modules.api.Module;
 import com.github.thmarx.modules.api.ModuleManager;
@@ -53,8 +53,8 @@ public class JettyModuleMappingHandler extends Handler.AbstractContainer {
 		activeModules.forEach((var moduleid) -> {
 			final Module module = moduleManager
 					.module(moduleid);
-			if (module.provides(JettyHttpHandlerExtensionPoint.class)) {
-				List<JettyHttpHandlerExtensionPoint> extensions = module.extensions(JettyHttpHandlerExtensionPoint.class);
+			if (module.provides(HttpHandlerExtensionPoint.class)) {
+				List<HttpHandlerExtensionPoint> extensions = module.extensions(HttpHandlerExtensionPoint.class);
 				extensions.forEach(ext -> moduleMappgings.put(moduleid, ext.getMapping()));
 			}
 		});
@@ -111,7 +111,9 @@ public class JettyModuleMappingHandler extends Handler.AbstractContainer {
 	private String getModulePath(Request request) {
 		var path = request.getHttpURI().getPath();
 		var contextPath = request.getContext().getContextPath();
-		path = path.replace(contextPath, "");
+		if (!"/".equals(contextPath) && path.startsWith(contextPath)) {
+			path = path.replaceFirst(contextPath, "");
+		}
 
 		if (path.startsWith("/")) {
 			path = path.substring(1);

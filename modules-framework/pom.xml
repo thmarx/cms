@@ -4,10 +4,10 @@
 	<parent>
 		<groupId>com.github.thmarx.cms</groupId>
 		<artifactId>cms-parent</artifactId>
-		<version>3.3.0</version>
+		<version>4.0.0</version>
 	</parent>
-	<groupId>com.github.thmarx.cms.modules.framework</groupId>
-	<artifactId>modules-framework</artifactId>
+	<groupId>com.github.thmarx.cms.module.framework</groupId>
+	<artifactId>module-framework</artifactId>
 	<packaging>pom</packaging>
 	
 	<modules>

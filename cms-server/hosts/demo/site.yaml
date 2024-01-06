@@ -4,7 +4,7 @@ hostname:
   - localhost1
 baseurl: "http://localhost:1010"
 language: en
-test: Hallo1
+test: Hallo
 markdown:
   engine: markedj
 theme: default
@@ -13,6 +13,7 @@ modules:
     - markedj-module
     - seo-module
     - forms-module
+    - example-module
 media:
   formats:
     - name: small

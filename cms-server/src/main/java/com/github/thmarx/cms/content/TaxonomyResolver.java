@@ -28,7 +28,7 @@ import com.github.thmarx.cms.api.db.Page;
 import com.github.thmarx.cms.api.db.taxonomy.Taxonomy;
 import com.github.thmarx.cms.api.mapper.ContentNodeMapper;
 import com.github.thmarx.cms.api.request.RequestContext;
-import com.github.thmarx.cms.api.request.features.RequestFeature;
+import com.github.thmarx.cms.api.feature.features.RequestFeature;
 import com.github.thmarx.cms.api.model.ListNode;
 import com.google.inject.Inject;
 import java.util.HashMap;

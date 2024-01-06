@@ -1,5 +1,5 @@
 ---
-title: Startseite
+title: StartseiteView
 template: test.ftl
 tags: [eins,zwei,drei]
 date: 2023-12-02

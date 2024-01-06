@@ -48,6 +48,8 @@ public abstract class Constants {
 		public static final String REDIRECT_LOCATION = "redirect.location";
 		
 		public static final String TEMPLATE = "template";
+		
+		public static final String TYPE = "type";
 	}
 	
 	public static class Folders {
@@ -56,6 +58,11 @@ public abstract class Constants {
 		public static final String ASSETS = "assets/";
 		public static final String EXTENSIONS = "extensions/";
 		public static final String MODULES = "modules/";
+	}
+	
+	public static class NodeType {
+		public static String VIEW = "view";
+		public static String PAGE = "page";
 	}
 	
 	public static class ContentTypes {

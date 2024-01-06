@@ -3,7 +3,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.github.thmarx.cms</groupId>
 	<artifactId>cms-parent</artifactId>
-	<version>3.3.0</version>
+	<version>4.0.0</version>
 	<packaging>pom</packaging>
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -21,7 +21,7 @@
 		<module>cms-filesystem</module>
 		<module>cms-media</module>
 		<module>cms-git</module>
-	 <module>cms-sandbox</module>
+		<module>cms-sandbox</module>
 	</modules>
 	<inceptionYear>2023</inceptionYear>
 	<organization>
@@ -58,12 +58,12 @@
 				<version>${project.version}</version>
 			</dependency>
 			<dependency>
-				<groupId>com.github.thmarx.cms.modules.framework</groupId>
+				<groupId>com.github.thmarx.cms.module.framework</groupId>
 				<artifactId>modules-manager</artifactId>
 				<version>${project.version}</version>
 			</dependency>
 			<dependency>
-				<groupId>com.github.thmarx.cms.modules.framework</groupId>
+				<groupId>com.github.thmarx.cms.module.framework</groupId>
 				<artifactId>modules-api</artifactId>
 				<version>${project.version}</version>
 			</dependency>
@@ -254,11 +254,39 @@
 				</executions>
 			</plugin>
 		</plugins>
+		<extensions>
+			<extension>
+				<groupId>org.apache.maven.wagon</groupId>
+				<artifactId>wagon-ftp</artifactId>
+				<version>3.5.3</version>
+			</extension>
+		</extensions>
 	</build>
 	
 	<profiles>
 		<profile>
 			<id>dist</id>
+		</profile>
+		<profile>
+			<id>deploy</id>
+			<distributionManagement>
+				<repository>
+					<snapshots>
+						<enabled>true</enabled>
+					</snapshots>
+					<id>marx-software-ftp</id>
+					<url>ftps://maven.marx-software.de</url>
+				</repository>
+			</distributionManagement>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-deploy-plugin</artifactId>
+						<version>3.1.1</version>
+					</plugin>
+				</plugins>
+			</build>
 		</profile>
 	</profiles>
 </project>

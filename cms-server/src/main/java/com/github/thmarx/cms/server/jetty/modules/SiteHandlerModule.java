@@ -26,7 +26,9 @@ import com.github.thmarx.cms.media.MediaManager;
 import com.github.thmarx.cms.server.jetty.FileFolderPathResource;
 import com.github.thmarx.cms.server.jetty.handler.JettyContentHandler;
 import com.github.thmarx.cms.server.jetty.handler.JettyMediaHandler;
+import com.github.thmarx.cms.server.jetty.handler.JettyRouteHandler;
 import com.github.thmarx.cms.server.jetty.handler.JettyTaxonomyHandler;
+import com.github.thmarx.cms.server.jetty.handler.JettyViewHandler;
 import com.google.inject.AbstractModule;
 import com.google.inject.Provides;
 import com.google.inject.Singleton;
@@ -47,8 +49,10 @@ public class SiteHandlerModule extends AbstractModule {
 	@Override
 	protected void configure() {
 		
+		bind(JettyViewHandler.class).in(Singleton.class);
 		bind(JettyContentHandler.class).in(Singleton.class);
 		bind(JettyTaxonomyHandler.class).in(Singleton.class);
+		bind(JettyRouteHandler.class).in(Singleton.class);
 	}
 	
 	@Provides

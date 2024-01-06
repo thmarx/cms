@@ -33,10 +33,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import org.eclipse.jetty.server.Request;
+import org.eclipse.jetty.server.Response;
 import org.graalvm.polyglot.Context;
 
 /**
@@ -54,6 +57,8 @@ public class RequestExtensions implements AutoCloseable, Feature {
 	private final List<TemplateFunctionExtension> registerTemplateFunctions = new ArrayList<>();
 	@Getter
 	private final Map<String, Function<ShortCodes.Parameter, String>> shortCodes = new HashMap<>();
+	
+	private final Map<String, BiConsumer<Request, Response>> routes = new HashMap<>();
 
 	@Getter
 	private final Context context;
@@ -61,6 +66,10 @@ public class RequestExtensions implements AutoCloseable, Feature {
 	
 	public void registerHttpExtension(final String method, final String path, final ExtensionHttpHandler handler) {
 		httpHandlerExtensions.add(new HttpHandlerExtension(method, path, handler));
+	}
+	
+	public void registerRoute(final String path, final BiConsumer<Request, Response> handler) {
+		routes.put(path, handler);
 	}
 
 	public Optional<HttpHandlerExtension> findHttpHandler (final String method, final String path) {

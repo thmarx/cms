@@ -27,7 +27,6 @@ import com.github.thmarx.cms.api.ThemeProperties;
 import com.github.thmarx.cms.api.messages.EmptyMessageSource;
 import com.github.thmarx.cms.api.messages.MessageSource;
 import com.github.thmarx.cms.api.messages.ThemeMessageSource;
-import com.github.thmarx.cms.api.theme.Assets;
 import com.github.thmarx.cms.api.theme.Theme;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -53,7 +52,6 @@ public class DefaultTheme implements Theme {
 	private final ThemeProperties properties;
 	private final MessageSource messages;
 	private boolean empty = false;
-	private Assets assets = new DefaultAssets();
 
 	private DefaultTheme(final Path templatePath, final ThemeProperties themeProperties, final boolean empty, final MessageSource messages) {
 		this(templatePath, themeProperties, messages);
@@ -95,11 +93,6 @@ public class DefaultTheme implements Theme {
 	@Override
 	public Path templatesPath() {
 		return themePath.resolve(Constants.Folders.TEMPLATES);
-	}
-
-	@Override
-	public Assets getAssets() {
-		return assets;
 	}
 
 	@Override

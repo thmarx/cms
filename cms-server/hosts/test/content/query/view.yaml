@@ -1,0 +1,26 @@
+## YAML Template.
+---
+template: views/test.html
+content:
+  query:
+    from: "/"
+    excerpt: 250
+    order_by: title
+    order_direction: asc
+    conditions: 
+      - name: where
+        operator: =
+        key: title
+        value: StartseiteView
+      - name: whereContains
+        key: tags
+        value: eins
+      - name: whereContainsNot
+        key: tags
+        value: vier
+      - name: whereIn
+        key: title
+        value: [StartseiteView, NotStartseite]
+      - name: whereNotIn
+        key: title
+        value: [SomethingElse]

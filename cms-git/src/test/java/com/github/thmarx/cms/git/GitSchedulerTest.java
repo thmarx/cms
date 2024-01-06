@@ -54,7 +54,7 @@ public class GitSchedulerTest {
 	public void testSomeMethod() throws IOException, SchedulerException, InterruptedException {
 		var config = Config.load(Path.of("git.yaml"));
 		scheduler.schedule(config.getRepos().get(0));
-		Thread.sleep(Duration.ofSeconds(30));
+		Thread.sleep(Duration.ofSeconds(15));
 	}
 	
 }

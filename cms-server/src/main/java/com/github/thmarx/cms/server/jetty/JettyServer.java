@@ -23,7 +23,6 @@ package com.github.thmarx.cms.server.jetty;
  */
 import com.github.thmarx.cms.api.Constants;
 import com.github.thmarx.cms.api.ServerProperties;
-import com.github.thmarx.cms.api.configuration.Config;
 import com.github.thmarx.cms.api.configuration.Configuration;
 import com.github.thmarx.cms.api.configuration.configs.ServerConfiguration;
 import com.github.thmarx.cms.api.configuration.configs.SiteConfiguration;
@@ -36,12 +35,10 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import com.github.thmarx.cms.server.HttpServer;
+import com.github.thmarx.cms.server.SiteConfigurationReloadTask;
 import java.util.Timer;
-import java.util.TimerTask;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import lombok.AllArgsConstructor;
-import lombok.Data;
 import org.eclipse.jetty.server.CustomRequestLog;
 import org.eclipse.jetty.server.HttpConfiguration;
 import org.eclipse.jetty.server.HttpConnectionFactory;
@@ -76,44 +73,25 @@ public class JettyServer implements HttpServer {
 					host.init(Path.of(Constants.Folders.MODULES));
 					vhosts.add(host);
 
-					final List<ReloadResource> reloadableResources = new ArrayList<>();
+					final SiteConfigurationReloadTask siteConfigLoaderTask = host.getInjector().getInstance(SiteConfigurationReloadTask.class);
+					var taxoPath = hostPath.resolve("config/taxonomy.yaml");
+					siteConfigLoaderTask.addConfiguration(props, SiteConfiguration.class);
+					siteConfigLoaderTask.addConfiguration(taxoPath, TaxonomyConfiguration.class);
 
-					reloadableResources.add(
-							new ReloadResource(
-									props,
-									Files.getLastModifiedTime(props).toMillis(),
-									() -> host.reloadConfiguration(SiteConfiguration.class)
-							));
-
-					var taxo = hostPath.resolve("config/taxonomy.yaml");
-					if (Files.exists(taxo)) {
-						reloadableResources.add(
-								new ReloadResource(
-										taxo,
-										Files.getLastModifiedTime(taxo).toMillis(),
-										() -> host.reloadConfiguration(TaxonomyConfiguration.class)
-								)
-						);
-						Files.list(taxo.getParent())
+					if (Files.exists(taxoPath.getParent())) {
+						Files.list(taxoPath.getParent())
 								.filter(path -> Constants.TAXONOMY_VALUE.matcher(path.getFileName().toString()).matches())
 								.forEach(path -> {
 									try {
-										reloadableResources.add(
-												new ReloadResource(
-														path,
-														Files.getLastModifiedTime(path).toMillis(),
-														() -> host.reloadConfiguration(TaxonomyConfiguration.class)
-												)
-										);
+										siteConfigLoaderTask
+												.addConfiguration(path, TaxonomyConfiguration.class);
 									} catch (IOException ioe) {
 										log.error(null, ioe);
 									}
 								});
 					}
 
-					SiteConfig siteConfig = new SiteConfig(
-							reloadableResources);
-					timer.schedule(siteConfig, TimeUnit.MINUTES.toMillis(1), TimeUnit.MINUTES.toMillis(1));
+					timer.schedule(siteConfigLoaderTask, TimeUnit.MINUTES.toMillis(1), TimeUnit.MINUTES.toMillis(1));
 				} catch (IOException ex) {
 					log.error(null, ex);
 				}
@@ -165,39 +143,5 @@ public class JettyServer implements HttpServer {
 	@Override
 	public void close() throws Exception {
 		server.stop();
-	}
-
-	@Slf4j
-	@AllArgsConstructor
-	public static class SiteConfig extends TimerTask {
-
-		public final List<ReloadResource> resources;
-
-		@Override
-		public void run() {
-
-			resources.forEach(resource -> {
-				try {
-					var tempMod = Files.getLastModifiedTime(resource.getPath()).toMillis();
-
-					if (tempMod != resource.getLastModified()) {
-						log.debug("modified: " + resource.getPath().getFileName().toString());
-						resource.setLastModified(tempMod);
-						resource.onChange.run();
-					}
-				} catch (IOException ex) {
-					log.error(null, ex);
-				}
-			});
-		}
-	}
-
-	@Data
-	@AllArgsConstructor
-	public static class ReloadResource {
-
-		private final Path path;
-		private long lastModified;
-		private final Runnable onChange;
 	}
 }

@@ -30,11 +30,12 @@ import com.github.thmarx.cms.api.configuration.configs.SiteConfiguration;
 import com.github.thmarx.cms.api.content.ContentParser;
 import com.github.thmarx.cms.api.eventbus.EventBus;
 import com.github.thmarx.cms.api.eventbus.EventListener;
+import com.github.thmarx.cms.api.eventbus.events.ConfigurationFileChanged;
 import com.github.thmarx.cms.api.eventbus.events.ContentChangedEvent;
 import com.github.thmarx.cms.api.eventbus.events.SitePropertiesChanged;
 import com.github.thmarx.cms.api.eventbus.events.TemplateChangedEvent;
 import com.github.thmarx.cms.extensions.ExtensionManager;
-import com.github.thmarx.cms.api.module.features.ContentRenderFeature;
+import com.github.thmarx.cms.api.feature.features.ContentRenderFeature;
 import com.github.thmarx.cms.api.template.TemplateEngine;
 import com.github.thmarx.cms.api.theme.Theme;
 import com.github.thmarx.cms.filesystem.FileDB;
@@ -51,6 +52,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -59,18 +61,19 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 public class VHost {
-	
+
 	protected final Configuration configuration;
 
 	private final Path hostBase;
-	
+
+	@Getter
 	protected Injector injector;
-	
+
 	public VHost(final Path hostBase, final Configuration configuration) {
 		this.hostBase = hostBase;
 		this.configuration = configuration;
 	}
-	
+
 	public void shutdown() {
 		try {
 			injector.getInstance(FileDB.class).close();
@@ -79,32 +82,32 @@ public class VHost {
 			log.error("", ex);
 		}
 	}
-	
+
 	public void reloadConfiguration(Class<? extends Config> configToReload) {
-		configuration.reload(configToReload);	
+		configuration.reload(configToReload);
 		if (SiteConfiguration.class.equals(configToReload)) {
 			injector.getInstance(EventBus.class).publish(new SitePropertiesChanged());
 		}
 	}
-	
-	public List<String> hostnames () {
+
+	public List<String> hostnames() {
 		return injector.getInstance(SiteProperties.class).hostnames();
 	}
-	
+
 	public void init(Path modulesPath) throws IOException {
 		this.injector = Guice.createInjector(new SiteModule(hostBase, configuration),
 				new ModulesModule(modulesPath), new SiteHandlerModule(), new ThemeModule());
-		
+
 		final CMSModuleContext cmsModuleContext = injector.getInstance(CMSModuleContext.class);
 		var moduleManager = injector.getInstance(ModuleManager.class);
 		var contentResolver = injector.getInstance(ContentResolver.class);
 		var requestContextFactory = injector.getInstance(RequestContextFactory.class);
-		
+
 		cmsModuleContext.add(
-				ContentRenderFeature.class, 
+				ContentRenderFeature.class,
 				new ContentRenderFeature(new RenderContentFunction(() -> contentResolver, () -> requestContextFactory))
 		);
-		
+
 		moduleManager.initModules();
 		List<String> activeModules = getActiveModules();
 		activeModules.stream()
@@ -117,7 +120,7 @@ public class VHost {
 						log.error(null, ex);
 					}
 				});
-		
+
 		moduleManager.getModuleIds().stream()
 				.filter(id -> !activeModules.contains(id))
 				.forEach((module_id) -> {
@@ -128,7 +131,7 @@ public class VHost {
 						log.error(null, ex);
 					}
 				});
-		
+
 		injector.getInstance(EventBus.class).register(ContentChangedEvent.class, (EventListener<ContentChangedEvent>) (ContentChangedEvent event) -> {
 			log.debug("invalidate content cache");
 			injector.getInstance(ContentParser.class).clearCache();
@@ -137,8 +140,10 @@ public class VHost {
 			log.debug("invalidate template cache");
 			injector.getInstance(TemplateEngine.class).invalidateCache();
 		});
+		injector.getInstance(EventBus.class).register(ConfigurationFileChanged.class,
+				(event) -> reloadConfiguration(event.clazz()));
 	}
-	
+
 	protected List<String> getActiveModules() {
 		List<String> activeModules = new ArrayList<>();
 		activeModules.addAll(injector.getInstance(SiteProperties.class).activeModules());

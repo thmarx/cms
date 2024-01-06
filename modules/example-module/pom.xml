@@ -4,7 +4,7 @@
 	<parent>
 		<groupId>com.github.thmarx.cms.modules</groupId>
 		<artifactId>cms-modules</artifactId>
-		<version>3.3.0</version>
+		<version>4.0.0</version>
 	</parent>
 	<artifactId>example-module</artifactId>
 	<packaging>jar</packaging>
@@ -21,7 +21,7 @@
 			<scope>provided</scope>
 		</dependency>
 		<dependency>
-			<groupId>com.github.thmarx.cms.modules.framework</groupId>
+			<groupId>com.github.thmarx.cms.module.framework</groupId>
 			<artifactId>modules-api</artifactId>
 			<scope>provided</scope>
 		</dependency>

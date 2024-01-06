@@ -29,14 +29,14 @@ import com.github.thmarx.cms.api.mapper.ContentNodeMapper;
 import com.github.thmarx.cms.api.markdown.MarkdownRenderer;
 import com.github.thmarx.cms.api.media.MediaService;
 import com.github.thmarx.cms.api.request.RequestContext;
-import com.github.thmarx.cms.api.request.features.HookSystemFeature;
-import com.github.thmarx.cms.api.request.features.InjectorFeature;
-import com.github.thmarx.cms.api.request.features.IsDevModeFeature;
-import com.github.thmarx.cms.api.request.features.IsPreviewFeature;
-import com.github.thmarx.cms.api.request.features.RequestFeature;
-import com.github.thmarx.cms.api.request.features.SiteMediaServiceFeature;
-import com.github.thmarx.cms.api.request.features.SitePropertiesFeature;
-import com.github.thmarx.cms.api.request.features.ThemeFeature;
+import com.github.thmarx.cms.api.feature.features.HookSystemFeature;
+import com.github.thmarx.cms.api.feature.features.InjectorFeature;
+import com.github.thmarx.cms.api.feature.features.IsDevModeFeature;
+import com.github.thmarx.cms.api.feature.features.IsPreviewFeature;
+import com.github.thmarx.cms.api.feature.features.RequestFeature;
+import com.github.thmarx.cms.api.feature.features.SiteMediaServiceFeature;
+import com.github.thmarx.cms.api.feature.features.SitePropertiesFeature;
+import com.github.thmarx.cms.api.feature.features.ThemeFeature;
 import com.github.thmarx.cms.api.theme.Theme;
 import com.github.thmarx.cms.content.ShortCodes;
 import com.github.thmarx.cms.extensions.ExtensionManager;
@@ -77,23 +77,21 @@ public class RequestContextFactory {
 	public RequestContext create(
 			String uri, Map<String, List<String>> queryParameters) throws IOException {
 
-		var requestTheme = new RequestTheme(theme);
-
 		var hookSystem = injector.getInstance(HookSystem.class);
 		
-		RequestExtensions requestExtensions = extensionManager.newContext(requestTheme, hookSystem);
+		RequestExtensions requestExtensions = extensionManager.newContext(theme, hookSystem);
 
 		RenderContext renderContext = new RenderContext(
 				markdownRenderer.get(),
 				new ShortCodes(requestExtensions.getShortCodes()),
-				requestTheme);
+				theme);
 
 		var context = new RequestContext();
 		context.add(InjectorFeature.class, new InjectorFeature(injector));
 		context.add(HookSystemFeature.class, new HookSystemFeature(hookSystem));
 		context.add(RequestFeature.class, new RequestFeature(uri, queryParameters));
 		context.add(RequestExtensions.class, requestExtensions);
-		context.add(ThemeFeature.class, new ThemeFeature(requestTheme));
+		context.add(ThemeFeature.class, new ThemeFeature(theme));
 		context.add(RenderContext.class, renderContext);
 		context.add(MarkdownRenderer.class, renderContext.markdownRenderer());
 		context.add(ContentParser.class, injector.getInstance(ContentParser.class));

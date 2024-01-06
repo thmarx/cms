@@ -22,11 +22,12 @@ package com.github.thmarx.cms.content;
  * #L%
  */
 
+import com.github.thmarx.cms.api.Constants;
 import com.github.thmarx.cms.api.content.ContentResponse;
 import com.github.thmarx.cms.api.db.ContentNode;
 import com.github.thmarx.cms.api.db.DB;
 import com.github.thmarx.cms.api.request.RequestContext;
-import com.github.thmarx.cms.api.request.features.RequestFeature;
+import com.github.thmarx.cms.api.feature.features.RequestFeature;
 import com.github.thmarx.cms.api.utils.PathUtil;
 import com.google.common.base.Strings;
 import java.io.IOException;
@@ -121,6 +122,8 @@ public class ContentResolver {
 		final ContentNode contentNode = db.getContent().byUri(uri).get();
 		if (contentNode.isRedirect()) {
 			return Optional.of(new ContentResponse(contentNode));
+		} else if (!Constants.NodeType.PAGE.equals(contentNode.nodeType())) {
+			return Optional.empty();
 		}
 		
 		try {

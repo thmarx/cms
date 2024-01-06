@@ -26,7 +26,6 @@ import com.github.thmarx.cms.api.PropertiesLoader;
 import com.github.thmarx.cms.api.ServerContext;
 import com.github.thmarx.cms.api.ServerProperties;
 import com.github.thmarx.cms.git.RepositoryManager;
-import com.github.thmarx.cms.server.HttpServer;
 import com.github.thmarx.cms.server.jetty.JettyServer;
 import java.io.IOException;
 import java.nio.file.Files;

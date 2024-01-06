@@ -31,19 +31,20 @@ import com.github.thmarx.cms.api.db.taxonomy.Taxonomy;
 import com.github.thmarx.cms.api.extensions.TemplateModelExtendingExtentionPoint;
 import com.github.thmarx.cms.api.messages.MessageSource;
 import com.github.thmarx.cms.api.request.RequestContext;
-import com.github.thmarx.cms.api.request.features.InjectorFeature;
-import com.github.thmarx.cms.api.request.features.IsDevModeFeature;
-import com.github.thmarx.cms.api.request.features.IsPreviewFeature;
-import com.github.thmarx.cms.api.request.features.RequestFeature;
-import com.github.thmarx.cms.api.request.features.SiteMediaServiceFeature;
+import com.github.thmarx.cms.api.feature.features.InjectorFeature;
+import com.github.thmarx.cms.api.feature.features.IsDevModeFeature;
+import com.github.thmarx.cms.api.feature.features.IsPreviewFeature;
+import com.github.thmarx.cms.api.feature.features.RequestFeature;
+import com.github.thmarx.cms.api.feature.features.SiteMediaServiceFeature;
 import com.github.thmarx.cms.api.template.TemplateEngine;
 import com.github.thmarx.cms.api.utils.PathUtil;
 import com.github.thmarx.cms.filesystem.functions.list.NodeListFunctionBuilder;
 import com.github.thmarx.cms.filesystem.functions.navigation.NavigationFunction;
 import com.github.thmarx.cms.api.utils.SectionUtil;
 import com.github.thmarx.cms.api.model.ListNode;
-import com.github.thmarx.cms.api.request.features.HookSystemFeature;
+import com.github.thmarx.cms.api.feature.features.HookSystemFeature;
 import com.github.thmarx.cms.content.template.LinkFunction;
+import com.github.thmarx.cms.content.views.model.View;
 import com.github.thmarx.cms.filesystem.functions.query.QueryFunction;
 import com.github.thmarx.cms.filesystem.functions.taxonomy.TaxonomyFunction;
 import com.github.thmarx.cms.request.RenderContext;
@@ -100,6 +101,22 @@ public class ContentRenderer {
 				model.values.put("taxonomy_value", taxonomyValue.get());
 			}
 			model.values.put("page", page);
+			
+		});
+	}
+	
+	public String renderView(final Path viewFile, final View view, final ContentNode contentNode, final RequestContext requestContext, final Page<ListNode> page) throws IOException {
+		return render(viewFile, requestContext, Collections.emptyMap(), 
+				contentNode.data(), "", (model) -> {
+					model.values.put("page", page);
+//			model.values.put("nodes", view.getNodes(
+//				db, 
+//				viewFile, 
+//				contentParser, 
+//				requestContext.get(RenderContext.class).markdownRenderer(), 
+//				requestContext.get(RequestExtensions.class).getContext(), 
+//				requestContext.get(RequestFeature.class).queryParameters(), requestContext)
+//			);
 			
 		});
 	}

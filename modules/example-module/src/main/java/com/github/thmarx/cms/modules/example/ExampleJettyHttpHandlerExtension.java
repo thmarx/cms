@@ -22,7 +22,7 @@ package com.github.thmarx.cms.modules.example;
  * #L%
  */
 
-import com.github.thmarx.cms.api.extensions.JettyHttpHandlerExtensionPoint;
+import com.github.thmarx.cms.api.extensions.HttpHandlerExtensionPoint;
 import com.github.thmarx.cms.api.extensions.Mapping;
 import com.github.thmarx.modules.api.annotation.Extension;
 import java.nio.ByteBuffer;
@@ -38,8 +38,8 @@ import org.eclipse.jetty.util.Callback;
  *
  * @author t.marx
  */
-@Extension(JettyHttpHandlerExtensionPoint.class)
-public class ExampleJettyHttpHandlerExtension extends JettyHttpHandlerExtensionPoint {
+@Extension(HttpHandlerExtensionPoint.class)
+public class ExampleJettyHttpHandlerExtension extends HttpHandlerExtensionPoint {
 
 	@Override
 	public Mapping getMapping() {

@@ -4,7 +4,7 @@
 	<parent>
 		<groupId>com.github.thmarx.cms</groupId>
 		<artifactId>cms-parent</artifactId>
-		<version>3.3.0</version>
+		<version>4.0.0</version>
 	</parent>
 	<groupId>com.github.thmarx.cms.modules</groupId>
 	<artifactId>cms-modules</artifactId>
@@ -12,12 +12,5 @@
 	
 	<modules>
 		<module>example-module</module>
-		<module>flexmark-module</module>
-		<module>pebble-module</module>
-		<module>thymeleaf-module</module>
-		<module>markedjs-module</module>
-		<module>search-module</module>
-		<module>seo-module</module>
-		<module>forms-module</module>
 	</modules>
 </project>

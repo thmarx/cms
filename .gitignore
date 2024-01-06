@@ -31,3 +31,6 @@ cms-server/modules/search-module
 cms-server/modules/seo-module
 cms-server/modules/forms-module
 cms-server/modules/markedj-module
+/distribution/temp/
+/distribution/build/
+/distribution/dist/

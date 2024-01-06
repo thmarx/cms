@@ -1,0 +1,32 @@
+<!DOCTYPE html SYSTEM "http://www.thymeleaf.org/dtd/xhtml1-strict-thymeleaf-4.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
+
+	<head>
+		<th:block th:replace="/libs/fragments.html :: header">
+		</th:block>
+	</head>
+
+	<body>
+
+		<nav th:replace="/libs/fragments.html :: navigation"></nav>
+
+		<div class="container">
+			<h2>Nodes</h2>
+			<th:block th:each="node : ${page.items}">
+				<div class="featured">
+					<h3 th:text="${node.name}"></h3>
+					<a th:href="${node.path}">goto</a>
+				</div>
+			</th:block>
+		</div>
+
+		<th:block th:replace="/libs/fragments.html :: footer"></th:block>
+
+		<script th:replace="/libs/fragments.html :: footer_scripts">
+
+		</script>
+	</body>
+
+
+
+</html>

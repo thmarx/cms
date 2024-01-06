@@ -34,6 +34,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -51,6 +52,7 @@ import org.graalvm.polyglot.io.IOAccess;
 @RequiredArgsConstructor
 @Slf4j
 public class ExtensionManager implements AutoCloseable {
+
 	private final DB db;
 	private final Theme parentTheme;
 
@@ -84,22 +86,22 @@ public class ExtensionManager implements AutoCloseable {
 					.option("engine.WarnInterpreterOnly", "false")
 					.build();
 
-			if (!parentTheme.empty()) {
-				var themeExtPath = parentTheme.extensionsPath();
-				if (Files.exists(themeExtPath)) {
-					log.debug("load extensions from theme");
-					loadExtensions(themeExtPath, theme_sources);
-				}
-			}
-			var extPath = db.getFileSystem().resolve("extensions/");
-			if (Files.exists(extPath)) {
-				log.debug("load extensions from site");
-				loadExtensions(extPath, sources);
-			}
+//			if (!parentTheme.empty()) {
+//				var themeExtPath = parentTheme.extensionsPath();
+//				if (Files.exists(themeExtPath)) {
+//					log.debug("load extensions from theme");
+//					loadExtensions(themeExtPath, theme_sources);
+//				}
+//			}
+//			var extPath = db.getFileSystem().resolve("extensions/");
+//			if (Files.exists(extPath)) {
+//				log.debug("load extensions from site");
+//				loadExtensions(extPath, sources);
+//			}
 		}
 	}
 
-	protected void loadExtensions(Path extPath, List<Source> sources) throws IOException {
+	protected void loadExtensions(final Path extPath, final List<Source> sources) throws IOException {
 		Files.list(extPath)
 				.filter(path -> !Files.isDirectory(path) && path.getFileName().toString().endsWith(".js"))
 				.forEach(extFile -> {
@@ -118,7 +120,27 @@ public class ExtensionManager implements AutoCloseable {
 					}
 				});
 	}
-	
+
+	protected void loadExtensions(final Path extPath, final Consumer<Source> loader) throws IOException {
+		Files.list(extPath)
+				.filter(path -> !Files.isDirectory(path) && path.getFileName().toString().endsWith(".js"))
+				.map(extFile -> {
+					try {
+						log.debug("load extension {}", extFile.getFileName().toString());
+						return Source.newBuilder(
+								"js",
+								Files.readString(extFile, StandardCharsets.UTF_8),
+								extFile.getFileName().toString() + ".mjs")
+								.encoding(StandardCharsets.UTF_8)
+								.cached(true)
+								.build();
+					} catch (IOException ex) {
+						log.error("", ex);
+					}
+					return null;
+				}).filter(source -> source != null)
+				.forEach(loader);
+	}
 
 	public RequestExtensions newContext(Theme theme, final HookSystem hookSystem) throws IOException {
 		var context = Context.newBuilder()
@@ -135,15 +157,15 @@ public class ExtensionManager implements AutoCloseable {
 		Context themeContext = null;
 		if (!theme.empty()) {
 			themeContext = Context.newBuilder()
-				.allowAllAccess(true)
-				.allowHostClassLookup(className -> true)
-				.allowHostAccess(HostAccess.ALL)
-				.allowValueSharing(true)
-				.hostClassLoader(getClassLoader())
-				.allowIO(IOAccess.newBuilder()
-						.fileSystem(new ExtensionFileSystem(theme.extensionsPath()))
-						.build())
-				.engine(engine).build();
+					.allowAllAccess(true)
+					.allowHostClassLookup(className -> true)
+					.allowHostAccess(HostAccess.ALL)
+					.allowValueSharing(true)
+					.hostClassLoader(getClassLoader())
+					.allowIO(IOAccess.newBuilder()
+							.fileSystem(new ExtensionFileSystem(theme.extensionsPath()))
+							.build())
+					.engine(engine).build();
 		}
 
 		RequestExtensions holder = new RequestExtensions(context, themeContext);
@@ -155,7 +177,12 @@ public class ExtensionManager implements AutoCloseable {
 		bindings.putMember("theme", theme);
 		bindings.putMember("hooks", hookSystem);
 
-		sources.forEach(context::eval);
+//		sources.forEach(context::eval);
+		var extPath = db.getFileSystem().resolve("extensions/");
+		if (Files.exists(extPath)) {
+			log.debug("load extensions from site");
+			loadExtensions(extPath, context::eval);
+		}
 
 		if (!theme.empty()) {
 			final Value themeBindings = themeContext.getBindings("js");
@@ -165,9 +192,13 @@ public class ExtensionManager implements AutoCloseable {
 			themeBindings.putMember("theme", theme);
 			themeBindings.putMember("hooks", hookSystem);
 
-			theme_sources.forEach(themeContext::eval);
+//			theme_sources.forEach(themeContext::eval);
+			var themeExtPath = parentTheme.extensionsPath();
+			if (Files.exists(themeExtPath)) {
+				log.debug("load extensions from theme");
+				loadExtensions(themeExtPath, context::eval);
+			}
 		}
-		
 
 		return holder;
 	}

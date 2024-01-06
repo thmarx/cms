@@ -35,9 +35,6 @@ public interface Theme {
 	
 	MessageSource getMessages ();
 	
-	@Deprecated(since = "3.3.0")
-	Assets getAssets();
-	
 	String getName();
 	
 	Path templatesPath ();

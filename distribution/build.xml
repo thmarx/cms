@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="distribution" default="distribution" basedir=".">
+	<property name="version">2024.01</property>
+	<property name="cms.version">4.0.0</property>
+	
+	<property name="markedj.version">v2.0.0</property>
+	<property name="flexmark.version">v1.0.0</property>
+	<property name="markedjs.version">v1.0.0</property>
+	<property name="pebble.version">v1.0.0</property>
+	<property name="thymeleaf.version">v1.0.0</property>
+	<property name="seo.version">v1.0.0</property>
+	<property name="search.version">v1.0.0</property>
+	<property name="forms.version">v1.0.0</property>
+		
+	<target name="download-modules" description="--> download modules">
+		<get src="https://github.com/thmarx/markedj-module/releases/download/${markedj.version}/markedj-module-bin.zip" dest="temp/markedj-module-bin.zip"></get>
+		<get src="https://github.com/thmarx/flexmark-module/releases/download/${flexmark.version}/flexmark-module-bin.zip" dest="temp/flexmark-module-bin.zip"></get>
+		<get src="https://github.com/thmarx/markedjs-module/releases/download/${markedjs.version}/markedjs-module-bin.zip" dest="temp/markedjs-module-bin.zip"></get>
+		<get src="https://github.com/thmarx/pebble-module/releases/download/${pebble.version}/pebble-module-bin.zip" dest="temp/pebble-module-bin.zip"></get>
+		<get src="https://github.com/thmarx/thymeleaf-module/releases/download/${thymeleaf.version}/thymeleaf-module-bin.zip" dest="temp/thymeleaf-module-bin.zip"></get>
+		<get src="https://github.com/thmarx/seo-module/releases/download/${seo.version}/seo-module-bin.zip" dest="temp/seo-module-bin.zip"></get>
+		<get src="https://github.com/thmarx/search-module/releases/download/${search.version}/search-module-bin.zip" dest="temp/search-module-bin.zip"></get>
+		<get src="https://github.com/thmarx/forms-module/releases/download/${forms.version}/forms-module-bin.zip" dest="temp/forms-module-bin.zip"></get>
+	</target>
+	
+	<target name="unzip-modules">
+		<unzip src="temp/markedj-module-bin.zip" dest="build/modules/" />
+		<unzip src="temp/markedjs-module-bin.zip" dest="build/modules/" />
+		<unzip src="temp/flexmark-module-bin.zip" dest="build/modules/" />
+		<unzip src="temp/thymeleaf-module-bin.zip" dest="build/modules/" />
+		<unzip src="temp/pebble-module-bin.zip" dest="build/modules/" />
+		<unzip src="temp/seo-module-bin.zip" dest="build/modules/" />
+		<unzip src="temp/search-module-bin.zip" dest="build/modules/" />
+		<unzip src="temp/forms-module-bin.zip" dest="build/modules/" />
+	</target>
+	
+	<target name="copy-server" description="--> copy server">
+		<unzip src="../cms-server/target/cms-server-${cms.version}.zip" dest="temp/" />
+		<copy todir="build/themes">
+			<fileset dir="temp/cms-server-${cms.version}/themes"/>
+		</copy>
+		<copy todir="build/lib">
+			<fileset dir="temp/cms-server-${cms.version}/lib"/>
+		</copy>
+		<copy todir="build/hosts">
+			<fileset dir="temp/cms-server-${cms.version}/hosts"/>
+		</copy>
+		<copy todir="build/">
+			<resources>
+				<file file="temp/cms-server-${cms.version}/cms-server-${cms.version}.jar"/>
+				<file file="temp/cms-server-${cms.version}/server.yaml"/>
+				<file file="temp/cms-server-${cms.version}/log4j2.xml"/>
+				<file file="../LICENSE"/>
+			</resources>
+		</copy>
+	</target>
+
+	<target name="clean">
+		<delete dir="build" />
+		<delete dir="temp" />
+		<delete dir="dist" />
+		
+		<mkdir  dir="dist/"  />
+		<mkdir  dir="temp/"  />
+		<mkdir  dir="build/modules/" />
+	</target>
+	
+	<target name="distribution" depends="clean,download-modules,unzip-modules,copy-server">
+		<zip destfile="dist/cms-server-${cms.version}.zip">
+			<fileset dir="build/"/>
+			<fileset dir="../" includes="README.md"/>
+		</zip>		
+	</target>
+</project>
