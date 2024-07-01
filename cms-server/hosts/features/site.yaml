@@ -5,6 +5,8 @@ baseurl: "http://localhost2:1010"
 language: en
 test: Hallo
 theme: test
+index:
+    persistent: true
 modules:
   active:
     - forms-module

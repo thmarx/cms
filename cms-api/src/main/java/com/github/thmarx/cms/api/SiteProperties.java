@@ -63,6 +63,10 @@ public class SiteProperties extends ThemeProperties {
 	public String theme () {
 		return (String) properties.get("theme");
 	}
+
+	public boolean peristentIndex () {
+		return (boolean)getSubMap("index").getOrDefault("persistent", false);
+	}
 	
 	public Locale locale () {
 		if (properties.containsKey("language")) {

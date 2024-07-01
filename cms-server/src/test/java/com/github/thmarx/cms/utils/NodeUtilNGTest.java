@@ -25,7 +25,7 @@ package com.github.thmarx.cms.utils;
 import com.github.thmarx.cms.api.utils.NodeUtil;
 import com.github.thmarx.cms.api.Constants;
 import com.github.thmarx.cms.api.db.ContentNode;
-import com.github.thmarx.cms.filesystem.MetaData;
+import com.github.thmarx.cms.filesystem.metadata.memory.MemoryMetaData;
 import java.util.Map;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;

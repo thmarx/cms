@@ -147,7 +147,7 @@ class NodeListFunction extends AbstractCurrentNodeFunction {
 					});
 
 			int totalPages = (int) Math.ceil((float) total / size);
-			return new Page<ListNode>(navNodes.size(), totalPages, page, navNodes);
+			return new Page<>(total, navNodes.size(), totalPages, page, navNodes);
 
 		} else {
 			return getNodesFromBase(baseNode, path, page, size, comparator, nodeFilter);
@@ -200,7 +200,7 @@ class NodeListFunction extends AbstractCurrentNodeFunction {
 					});
 
 			int totalPages = (int) Math.ceil((float) total / pageSize);
-			return new Page<ListNode>(pageSize, totalPages, page, nodes);
+			return new Page<ListNode>(total, pageSize, totalPages, page, nodes);
 		} catch (Exception ex) {
 			log.error(null, ex);
 		}

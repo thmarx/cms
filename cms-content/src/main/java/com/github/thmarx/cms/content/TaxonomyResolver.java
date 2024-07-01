@@ -92,7 +92,7 @@ public class TaxonomyResolver {
 			if (value.isPresent()) {
 				resultPage = new Page<>();
 				resultPage.setPage(page);
-				resultPage.setSize(size);
+				resultPage.setPageSize(size);
 				
 				template = taxonomy.getSingleTemplate();
 				meta.put(Constants.MetaFields.TITLE, taxonomy.getTitle() + " - " + taxonomy.getValueTitle(value.get()));
@@ -101,7 +101,8 @@ public class TaxonomyResolver {
 					return contentNodeMapper.toListNode(node, context);
 				}).filter(node -> node != null).toList();
 				resultPage.setItems(nodes);
-				resultPage.setTotal(contentPage.getTotal());	
+				resultPage.setTotalItems(contentPage.getTotalItems());	
+				resultPage.setTotalPages(contentPage.getTotalPages());
 			} else {
 				meta.put(Constants.MetaFields.TITLE, taxonomy.getTitle());
 			}

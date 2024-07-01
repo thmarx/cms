@@ -22,6 +22,7 @@ package com.github.thmarx.cms.filesystem;
  * #L%
  */
 import com.github.thmarx.cms.api.eventbus.EventBus;
+import com.github.thmarx.cms.api.utils.FileUtils;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -36,9 +37,10 @@ import org.yaml.snakeyaml.Yaml;
  *
  * @author t.marx
  */
-public class FileSystemTest extends AbstractFileSystemTest {
+public class PresistentFileSystemTest extends AbstractFileSystemTest {
 
 	static FileSystem fileSystem;
+	
 	
 	@BeforeAll
 	static void setup() throws IOException {
@@ -52,12 +54,16 @@ public class FileSystemTest extends AbstractFileSystemTest {
 				throw new RuntimeException(e);
 			}
 		});
-		fileSystem.init();
+		fileSystem.init(MetaData.Type.PERSISTENT);
 	}
 	
 	@AfterAll
-	static void shutdown () {
+	static void shutdown () throws IOException {
 		fileSystem.shutdown();
+		
+		if (Files.exists(Path.of("src/test/resources/data"))) {
+			FileUtils.deleteFolder(Path.of("src/test/resources/data"));
+		}
 	}
 
 	@Override

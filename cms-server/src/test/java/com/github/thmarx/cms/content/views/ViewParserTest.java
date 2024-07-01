@@ -29,8 +29,6 @@ import com.github.thmarx.cms.api.mapper.ContentNodeMapper;
 import com.github.thmarx.cms.api.markdown.MarkdownRenderer;
 import com.github.thmarx.cms.api.request.RequestContext;
 import com.github.thmarx.cms.content.DefaultContentParser;
-import com.github.thmarx.cms.content.views.ViewParser;
-import com.github.thmarx.cms.content.views.ViewParser;
 import com.github.thmarx.cms.eventbus.DefaultEventBus;
 import com.github.thmarx.cms.filesystem.FileDB;
 import java.io.IOException;

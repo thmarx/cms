@@ -53,8 +53,12 @@ public class FileDB implements DB {
 	private FileTaxonomies taxonomies;
 	
 	public void init () throws IOException {
+		init(MetaData.Type.MEMORY);
+	}
+	
+	public void init (MetaData.Type metaDataType) throws IOException {
 		fileSystem = new FileSystem(hostBaseDirectory, eventBus, contentParser);
-		fileSystem.init();
+		fileSystem.init(metaDataType);
 		
 		content = new FileContent(fileSystem);
 		

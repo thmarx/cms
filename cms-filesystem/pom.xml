@@ -10,6 +10,20 @@
 	<packaging>jar</packaging>
     
 	<dependencies>
+		
+		<dependency>
+			<groupId>org.apache.lucene</groupId>
+			<artifactId>lucene-core</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.lucene</groupId>
+			<artifactId>lucene-analysis-common</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.h2database</groupId>
+			<artifactId>h2-mvstore</artifactId>
+		</dependency>
+		
 		<dependency>
 			<groupId>com.github.thmarx.cms</groupId>
 			<artifactId>cms-api</artifactId>

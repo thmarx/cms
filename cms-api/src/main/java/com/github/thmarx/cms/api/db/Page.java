@@ -37,11 +37,27 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class Page<T> {
 	
-	public static final Page EMPTY = new Page(0, 0, 1, Collections.EMPTY_LIST);
+	public static final Page EMPTY = new Page(0, 0, 0, 1, Collections.EMPTY_LIST);
 	
-	private int size;
-	private long total;
+	/**
+	 * Total number of items
+	 */
+	private long totalItems;
+	/**
+	 * Total number of items per page
+	 */
+	private long pageSize;
+	/**
+	 * Total number of pages
+	 */
+	private long totalPages;
+	/**
+	 * Number of the current page
+	 */
 	private int page;
 	
+	/**
+	 * Items of the current page;
+	 */
 	private List<T> items;
 }

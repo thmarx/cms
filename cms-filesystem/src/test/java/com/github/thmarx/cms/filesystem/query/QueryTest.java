@@ -21,10 +21,9 @@ package com.github.thmarx.cms.filesystem.query;
  * <http://www.gnu.org/licenses/gpl-3.0.html>.
  * #L%
  */
+import com.github.thmarx.cms.filesystem.metadata.memory.MemoryQuery;
 import com.github.thmarx.cms.api.Constants;
 import com.github.thmarx.cms.api.db.ContentNode;
-import com.github.thmarx.cms.filesystem.index.IndexProviding;
-import com.github.thmarx.cms.filesystem.index.SecondaryIndex;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -46,23 +45,6 @@ import org.junit.jupiter.api.Test;
 public class QueryTest {
 
 	private static Collection<ContentNode> nodes;
-
-	private IndexProviding indexProviding = new IndexProviding() {
-		private ConcurrentMap<String, SecondaryIndex<?>> secondaryIndexes = new ConcurrentHashMap<>();
-
-		@Override
-		public SecondaryIndex<?> getOrCreateIndex(String field, Function<ContentNode, Object> indexFunction) {
-			if (!secondaryIndexes.containsKey(field)) {
-				var index = SecondaryIndex.<Object>builder()
-						.indexFunction(indexFunction)
-						.build();
-				index.addAll(nodes);
-				secondaryIndexes.put(field, index);
-			}
-
-			return secondaryIndexes.get(field);
-		}
-	};
 
 	@BeforeAll
 	public static void setup() {
@@ -100,25 +82,23 @@ public class QueryTest {
 		nodes.add(node);
 	}
 
-	protected Query<ContentNode> createQuery() {
-		var query = new Query<>(nodes, indexProviding, (node, i) -> node);
-		query.setCustomOperators(Map.of(
-				"none", (node_value, value) -> false
-		));
+	protected MemoryQuery<ContentNode> createQuery() {
+		var query = new MemoryQuery<>(nodes, (node, i) -> node);
+		query.addCustomOperators("none", (node_value, value) -> false);
 
 		return query;
 	}
 
 	@Test
 	public void test_custom_operator() {
-		Query<ContentNode> query = createQuery();
+		MemoryQuery<ContentNode> query = createQuery();
 		var nodes = query.where("featured", "none", true).get();
 		Assertions.assertThat(nodes).hasSize(0);
 	}
 
 	@Test
 	public void test_eq() {
-		Query<ContentNode> query = createQuery();
+		MemoryQuery<ContentNode> query = createQuery();
 		var nodes = query.where("featured", true).get();
 		Assertions.assertThat(nodes).hasSize(1);
 		Assertions.assertThat(nodes.getFirst().uri()).isEqualTo("/2");
@@ -131,7 +111,7 @@ public class QueryTest {
 
 	@Test
 	public void test_not() {
-		Query<ContentNode> query = createQuery();
+		MemoryQuery<ContentNode> query = createQuery();
 		var nodes = query.where("featured", "!=", true).get();
 		Assertions.assertThat(nodes).hasSize(2);
 		Assertions.assertThat(nodes.stream().map(ContentNode::uri).toList()).contains("/test1", "/test2");
@@ -139,14 +119,14 @@ public class QueryTest {
 
 	@Test
 	public void test_data() {
-		Query<ContentNode> query = createQuery();
+		MemoryQuery<ContentNode> query = createQuery();
 		var nodes = query.get();
 		Assertions.assertThat(nodes).hasSize(3);
 	}
 
 	@Test
 	public void test_sort_asc() {
-		Query<ContentNode> query = createQuery();
+		MemoryQuery<ContentNode> query = createQuery();
 		var nodes = query.where("featured", false).orderby("index").asc().get();
 		Assertions.assertThat(nodes).hasSize(2);
 		Assertions.assertThat(nodes.get(0).uri()).isEqualTo("/test1");
@@ -155,7 +135,7 @@ public class QueryTest {
 
 	@Test
 	public void test_sort_desc() {
-		Query<ContentNode> query = createQuery();
+		MemoryQuery<ContentNode> query = createQuery();
 		var nodes = query.where("featured", false).orderby("index").desc().get();
 		Assertions.assertThat(nodes).hasSize(2);
 		Assertions.assertThat(nodes.get(0).uri()).isEqualTo("/test2");
@@ -164,7 +144,7 @@ public class QueryTest {
 
 	@Test
 	public void test_offset_0() {
-		Query<ContentNode> query = createQuery();
+		MemoryQuery<ContentNode> query = createQuery();
 		var page = query.where("featured", false).orderby("index").desc().page(1, 1);
 		Assertions.assertThat(page.getItems()).hasSize(1);
 		Assertions.assertThat(page.getItems().get(0).uri()).isEqualTo("/test2");
@@ -172,7 +152,7 @@ public class QueryTest {
 
 	@Test
 	public void test_offset_1() {
-		Query<ContentNode> query = createQuery();
+		MemoryQuery<ContentNode> query = createQuery();
 		var page = query.where("featured", false).orderby("index").desc().page(2, 1);
 		Assertions.assertThat(page.getItems()).hasSize(1);
 		Assertions.assertThat(page.getItems().getFirst().uri()).isEqualTo("/test1");
@@ -180,7 +160,7 @@ public class QueryTest {
 
 	@Test
 	public void test_contains() {
-		Query<ContentNode> query = createQuery();
+		MemoryQuery<ContentNode> query = createQuery();
 		var nodes = query.whereContains("tags", "one").get();
 		Assertions.assertThat(nodes).hasSize(1);
 		Assertions.assertThat(nodes.get(0).uri()).isEqualTo("/test2");
@@ -188,7 +168,7 @@ public class QueryTest {
 
 	@Test
 	public void test_contains_operator() {
-		Query<ContentNode> query = createQuery();
+		MemoryQuery<ContentNode> query = createQuery();
 		var nodes = query.where("tags", "contains", "one").get();
 		Assertions.assertThat(nodes).hasSize(1);
 		Assertions.assertThat(nodes.get(0).uri()).isEqualTo("/test2");
@@ -196,7 +176,7 @@ public class QueryTest {
 
 	@Test
 	public void test_not_contains() {
-		Query<ContentNode> query = createQuery();
+		MemoryQuery<ContentNode> query = createQuery();
 		var nodes = query.whereNotContains("tags", "one").get();
 		Assertions.assertThat(nodes).hasSize(1);
 		Assertions.assertThat(nodes.get(0).uri()).isEqualTo("/test1");
@@ -204,7 +184,7 @@ public class QueryTest {
 
 	@Test
 	public void test_not_contains_operator() {
-		Query<ContentNode> query = createQuery();
+		MemoryQuery<ContentNode> query = createQuery();
 		var nodes = query.where("tags", "not contains", "one").get();
 		Assertions.assertThat(nodes).hasSize(1);
 		Assertions.assertThat(nodes.get(0).uri()).isEqualTo("/test1");
@@ -212,7 +192,7 @@ public class QueryTest {
 
 	@Test
 	public void test_gt() {
-		Query<ContentNode> query = createQuery();
+		MemoryQuery<ContentNode> query = createQuery();
 		var nodes = query.where("index", ">", 1).get();
 		Assertions.assertThat(nodes).hasSize(1);
 		Assertions.assertThat(nodes.get(0).uri()).isEqualTo("/test2");
@@ -220,7 +200,7 @@ public class QueryTest {
 
 	@Test
 	public void test_gte() {
-		Query<ContentNode> query = createQuery();
+		MemoryQuery<ContentNode> query = createQuery();
 		var nodes = query.where("index", ">=", 2).get();
 		Assertions.assertThat(nodes).hasSize(1);
 		Assertions.assertThat(nodes.get(0).uri()).isEqualTo("/test2");
@@ -228,7 +208,7 @@ public class QueryTest {
 
 	@Test
 	public void test_lt() {
-		Query<ContentNode> query = createQuery();
+		MemoryQuery<ContentNode> query = createQuery();
 		var nodes = query.where("index", "<", 2).get();
 		Assertions.assertThat(nodes).hasSize(1);
 		Assertions.assertThat(nodes.get(0).uri()).isEqualTo("/test1");
@@ -236,7 +216,7 @@ public class QueryTest {
 
 	@Test
 	public void test_lte() {
-		Query<ContentNode> query = createQuery();
+		MemoryQuery<ContentNode> query = createQuery();
 		var nodes = query.where("index", "<=", 1).get();
 		Assertions.assertThat(nodes).hasSize(1);
 		Assertions.assertThat(nodes.get(0).uri()).isEqualTo("/test1");
@@ -244,7 +224,7 @@ public class QueryTest {
 
 	@Test
 	public void test_group_by() {
-		Query<ContentNode> query = createQuery();
+		MemoryQuery<ContentNode> query = createQuery();
 		var nodes = query.groupby("featured");
 		Assertions.assertThat(nodes).hasSize(2);
 		Assertions.assertThat(nodes).containsKeys(true, false);
@@ -254,7 +234,7 @@ public class QueryTest {
 
 	@Test
 	public void test_in() {
-		Query<ContentNode> query = createQuery();
+		MemoryQuery<ContentNode> query = createQuery();
 		var nodes = query.whereIn("index", 1, 2).get();
 		Assertions.assertThat(nodes).hasSize(2);
 		Assertions.assertThat(nodes.stream().map(ContentNode::uri).toList()).contains("/test1", "/test2");
@@ -262,7 +242,7 @@ public class QueryTest {
 
 	@Test
 	public void test_in_operator() {
-		Query<ContentNode> query = createQuery();
+		MemoryQuery<ContentNode> query = createQuery();
 		var nodes = query.where("index", "in", List.of(1, 2)).get();
 		Assertions.assertThat(nodes).hasSize(2);
 		Assertions.assertThat(nodes.stream().map(ContentNode::uri).toList()).contains("/test1", "/test2");
@@ -275,7 +255,7 @@ public class QueryTest {
 
 	@Test
 	public void test_not_in() {
-		Query<ContentNode> query = createQuery();
+		MemoryQuery<ContentNode> query = createQuery();
 		var nodes = query.whereNotIn("index", 1, 3, 4).get();
 		Assertions.assertThat(nodes).hasSize(1);
 		Assertions.assertThat(nodes.stream().map(ContentNode::uri).toList()).contains("/test2");
@@ -283,7 +263,7 @@ public class QueryTest {
 
 	@Test
 	public void test_not_in_operator() {
-		Query<ContentNode> query = createQuery();
+		MemoryQuery<ContentNode> query = createQuery();
 		var nodes = query.where("index", "not in", List.of(1, 3, 4)).get();
 		Assertions.assertThat(nodes).hasSize(1);
 		Assertions.assertThat(nodes.stream().map(ContentNode::uri).toList()).contains("/test2");
@@ -296,7 +276,7 @@ public class QueryTest {
 
 	@Test
 	public void test_json() {
-		Query<ContentNode> query = createQuery();
+		MemoryQuery<ContentNode> query = createQuery();
 		var nodes = query.json().page(1, 1).getItems();
 		Assertions.assertThat(nodes).hasSize(1);
 		Assertions.assertThat(nodes.get(0).uri()).isEqualTo("/json");
@@ -304,7 +284,7 @@ public class QueryTest {
 
 	@Test
 	public void test_where_not_null() {
-		Query<ContentNode> query = createQuery();
+		MemoryQuery<ContentNode> query = createQuery();
 		var nodes = query.where("index", "!=", null).get();
 		Assertions.assertThat(nodes).hasSize(2);
 

@@ -34,7 +34,7 @@
 							>
 							<a class="page-link" th:href="${links.createUrl('/blog?page=' + prevPage)}" tabindex="-1">Previous</a>
 						</li>
-						<li class="page-item" th:classappend="${page.page == page.total ? 'disabled' : ''}"
+						<li class="page-item" th:classappend="${page.page == page.totalPages ? 'disabled' : ''}"
 							th:with="nextPage = ${page.page+1}"
 							>
 							<a class="page-link" th:href="${links.createUrl('/blog?page=' + nextPage)}">Next</a>

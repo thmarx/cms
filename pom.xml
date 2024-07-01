@@ -26,7 +26,7 @@
 		<module>cms-content</module>
 		<module>cms-extensions</module>
 		<module>cms-auth</module>
-	 <module>integration-tests</module>
+		<module>integration-tests</module>
 	</modules>
 	<inceptionYear>2023</inceptionYear>
 	<organization>
@@ -122,12 +122,28 @@
 			<dependency>
 				<groupId>com.google.guava</groupId>
 				<artifactId>guava</artifactId>
-				<version>33.2.0-jre</version>
+				<version>33.2.1-jre</version>
 			</dependency>
 			<dependency>
 				<groupId>com.google.inject</groupId>
 				<artifactId>guice</artifactId>
 				<version>7.0.0</version>
+			</dependency>
+
+			<dependency>
+				<groupId>org.apache.lucene</groupId>
+				<artifactId>lucene-core</artifactId>
+				<version>9.11.1</version>
+			</dependency>
+			<dependency>
+				<groupId>org.apache.lucene</groupId>
+				<artifactId>lucene-analysis-common</artifactId>
+				<version>9.11.1</version>
+			</dependency>
+			<dependency>
+				<groupId>com.h2database</groupId>
+				<artifactId>h2-mvstore</artifactId>
+				<version>2.2.224</version>
 			</dependency>
 
 			<dependency>
@@ -180,7 +196,7 @@
 			<dependency>
 				<groupId>org.assertj</groupId>
 				<artifactId>assertj-core</artifactId>
-				<version>3.25.3</version>
+				<version>3.26.0</version>
 				<scope>test</scope>
 			</dependency>
 			<dependency>
@@ -206,6 +222,16 @@
 				<groupId>org.awaitility</groupId>
 				<artifactId>awaitility</artifactId>
 				<version>4.2.1</version>
+			</dependency>
+			<dependency>
+				<groupId>info.picocli</groupId>
+				<artifactId>picocli</artifactId>
+				<version>4.7.6</version>
+			</dependency>
+			<dependency>
+				<groupId>org.semver4j</groupId>
+				<artifactId>semver4j</artifactId>
+				<version>5.3.0</version>
 			</dependency>
 		</dependencies>
 	</dependencyManagement>
@@ -292,7 +318,7 @@
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>
 					<artifactId>maven-surefire-plugin</artifactId>
-					<version>3.2.5</version>
+					<version>3.3.0</version>
 				</plugin>
 			</plugins>
 		</pluginManagement>
@@ -318,7 +344,7 @@
 					<plugin>
 						<groupId>org.apache.maven.plugins</groupId>
 						<artifactId>maven-deploy-plugin</artifactId>
-						<version>3.1.1</version>
+						<version>3.1.2</version>
 					</plugin>
 				</plugins>
 			</build>

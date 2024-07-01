@@ -40,3 +40,4 @@ cms-server/cms.pid
 /distribution/temp/
 /distribution/build/
 /distribution/dist/
+/cms-server/hosts/features/data/

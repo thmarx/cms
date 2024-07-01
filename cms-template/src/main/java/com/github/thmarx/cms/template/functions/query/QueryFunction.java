@@ -30,7 +30,8 @@ import com.github.thmarx.cms.api.feature.features.MarkdownRendererFeature;
 import com.github.thmarx.cms.template.functions.AbstractCurrentNodeFunction;
 import com.github.thmarx.cms.api.model.ListNode;
 import com.github.thmarx.cms.api.request.RequestContext;
-import com.github.thmarx.cms.filesystem.query.Query;
+import com.github.thmarx.cms.filesystem.metadata.memory.MemoryQuery;
+import com.github.thmarx.cms.filesystem.metadata.query.ExtendableQuery;
 import com.google.common.base.Strings;
 import java.nio.file.Path;
 import java.util.HashMap;
@@ -82,7 +83,7 @@ public class QueryFunction extends AbstractCurrentNodeFunction {
 	public ContentQuery create() {
 		
 		var query = db.getContent().query(nodeMapper());
-		((Query)query).setCustomOperators(extendedQueryOperations);
+		((ExtendableQuery)query).addAllCustomOperators(extendedQueryOperations);
 		
 		if (!Strings.isNullOrEmpty(contentType)) {
 			query.contentType(contentType);
@@ -92,7 +93,9 @@ public class QueryFunction extends AbstractCurrentNodeFunction {
 
 	public ContentQuery create(final String startUri) {
 		var query = db.getContent().query(startUri, nodeMapper());
-		((Query)query).setCustomOperators(extendedQueryOperations);
+		
+		((ExtendableQuery)query).addAllCustomOperators(extendedQueryOperations);
+		
 		if (!Strings.isNullOrEmpty(contentType)) {
 			query.contentType(contentType);
 		}

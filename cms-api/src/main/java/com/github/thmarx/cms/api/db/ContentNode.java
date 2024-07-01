@@ -28,6 +28,7 @@ import com.github.thmarx.cms.api.feature.features.IsPreviewFeature;
 import com.github.thmarx.cms.api.feature.features.SitePropertiesFeature;
 import com.github.thmarx.cms.api.utils.MapUtil;
 import com.github.thmarx.cms.api.utils.SectionUtil;
+import java.io.Serializable;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Date;
@@ -40,7 +41,7 @@ import java.util.Optional;
  * @author t.marx
  */
 public record ContentNode(String uri, String name, Map<String, Object> data,
-		boolean directory, Map<String, ContentNode> children, LocalDate lastmodified) {
+		boolean directory, Map<String, ContentNode> children, LocalDate lastmodified) implements Serializable {
 
 	public ContentNode(String uri, String name, Map<String, Object> data, boolean directory, Map<String, ContentNode> children) {
 		this(uri, name, data, directory, children, LocalDate.now());

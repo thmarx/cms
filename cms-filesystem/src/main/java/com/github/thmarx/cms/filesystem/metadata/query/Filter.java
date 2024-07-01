@@ -1,4 +1,4 @@
-package com.github.thmarx.cms.filesystem.query;
+package com.github.thmarx.cms.filesystem.metadata.query;
 
 /*-
  * #%L
@@ -21,9 +21,6 @@ package com.github.thmarx.cms.filesystem.query;
  * <http://www.gnu.org/licenses/gpl-3.0.html>.
  * #L%
  */
-
-import com.github.thmarx.cms.api.db.ContentNode;
-import java.util.function.Predicate;
 
 /**
  *

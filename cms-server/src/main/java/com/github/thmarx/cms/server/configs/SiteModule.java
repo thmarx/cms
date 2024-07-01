@@ -49,6 +49,7 @@ import com.github.thmarx.cms.content.ViewResolver;
 import com.github.thmarx.cms.eventbus.DefaultEventBus;
 import com.github.thmarx.cms.extensions.ExtensionManager;
 import com.github.thmarx.cms.filesystem.FileDB;
+import com.github.thmarx.cms.filesystem.MetaData;
 import com.github.thmarx.cms.template.functions.taxonomy.TaxonomyFunction;
 import com.github.thmarx.cms.media.FileMediaService;
 import com.github.thmarx.cms.media.SiteMediaManager;
@@ -163,7 +164,7 @@ public class SiteModule extends AbstractModule {
 
 	@Provides
 	@Singleton
-	public DB fileDb(ContentParser contentParser, Configuration configuration, EventBus eventBus) throws IOException {
+	public DB fileDb(SiteProperties site, ContentParser contentParser, Configuration configuration, EventBus eventBus) throws IOException {
 		var db = new FileDB(hostBase, eventBus, (file) -> {
 			try {
 				return contentParser.parseMeta(file);
@@ -172,7 +173,11 @@ public class SiteModule extends AbstractModule {
 				throw new RuntimeException(ioe);
 			}
 		}, configuration);
-		db.init();
+		if (site.peristentIndex()) {
+			db.init(MetaData.Type.PERSISTENT);
+		} else {
+			db.init();
+		}
 		return db;
 	}
 

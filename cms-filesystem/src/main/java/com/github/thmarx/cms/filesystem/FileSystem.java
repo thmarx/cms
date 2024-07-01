@@ -21,9 +21,11 @@ package com.github.thmarx.cms.filesystem;
  * <http://www.gnu.org/licenses/gpl-3.0.html>.
  * #L%
  */
+import com.github.thmarx.cms.filesystem.metadata.memory.MemoryMetaData;
 import com.github.thmarx.cms.api.ModuleFileSystem;
 import com.github.thmarx.cms.api.Constants;
 import com.github.thmarx.cms.api.db.ContentNode;
+import com.github.thmarx.cms.api.db.ContentQuery;
 import com.github.thmarx.cms.api.db.DBFileSystem;
 import com.github.thmarx.cms.api.eventbus.EventBus;
 import com.github.thmarx.cms.api.eventbus.events.ContentChangedEvent;
@@ -32,7 +34,8 @@ import com.github.thmarx.cms.api.eventbus.events.InvalidateTemplateCacheEvent;
 import com.github.thmarx.cms.api.eventbus.events.ReIndexContentMetaDataEvent;
 import com.github.thmarx.cms.api.eventbus.events.TemplateChangedEvent;
 import com.github.thmarx.cms.api.utils.PathUtil;
-import com.github.thmarx.cms.filesystem.query.Query;
+import com.github.thmarx.cms.filesystem.metadata.AbstractMetaData;
+import com.github.thmarx.cms.filesystem.metadata.persistent.PersistentMetaData;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -70,29 +73,19 @@ public class FileSystem implements ModuleFileSystem, DBFileSystem {
 	private Path contentBase;
 
 	@Getter
-	private final MetaData metaData = new MetaData();
+	private MetaData metaData;
 
 	@Override
 	public Path base () {
 		return hostBaseDirectory;
 	}
 	
-	public <T> Query<T> query(final BiFunction<ContentNode, Integer, T> nodeMapper) {
-		return new Query(new ArrayList<>(metaData.nodes().values()), metaData, nodeMapper);
+	public <T> ContentQuery<T> query(final BiFunction<ContentNode, Integer, T> nodeMapper) {
+		return metaData.query(nodeMapper);
 	}
 
-	public <T> Query<T> query(final String startURI, final BiFunction<ContentNode, Integer, T> nodeMapper) {
-
-		final String uri;
-		if (startURI.startsWith("/")) {
-			uri = startURI.substring(1);
-		} else {
-			uri = startURI;
-		}
-
-		var nodes = metaData.nodes().values().stream().filter(node -> node.uri().startsWith(uri)).toList();
-
-		return new Query(nodes, metaData, nodeMapper);
+	public <T> ContentQuery<T> query(final String startURI, final BiFunction<ContentNode, Integer, T> nodeMapper) {
+		return metaData.query(startURI, nodeMapper);
 	}
 
 	public boolean isVisible(final String uri) {
@@ -101,7 +94,7 @@ public class FileSystem implements ModuleFileSystem, DBFileSystem {
 			return false;
 		}
 		var n = node.get();
-		return MetaData.isVisible(n);
+		return AbstractMetaData.isVisible(n);
 	}
 
 	@Override
@@ -147,12 +140,12 @@ public class FileSystem implements ModuleFileSystem, DBFileSystem {
 
 	public List<ContentNode> listDirectories(final Path base, final String start) {
 		var startPath = base.resolve(start);
-		String folder = PathUtil.toRelativePath(startPath, contentBase).toString();
+		String folder = PathUtil.toRelativePath(startPath, contentBase);
 
 		List<ContentNode> nodes = new ArrayList<>();
 
 		if ("".equals(folder)) {
-			metaData.tree().values()
+			metaData.getTree().values()
 					.stream()
 					.filter(node -> node.isDirectory())
 					.forEach((node) -> {
@@ -163,7 +156,7 @@ public class FileSystem implements ModuleFileSystem, DBFileSystem {
 			var parts = folder.split("\\/");
 			for (var part : parts) {
 				if (node == null) {
-					node = metaData.tree().get(part);
+					node = metaData.getTree().get(part);
 				} else {
 					node = node.children().get(part);
 				}
@@ -177,7 +170,7 @@ public class FileSystem implements ModuleFileSystem, DBFileSystem {
 						});
 			}
 		} else {
-			metaData.tree().get(folder).children().values()
+			metaData.getTree().get(folder).children().values()
 					.stream()
 					.filter(node -> node.isDirectory())
 					.forEach((node) -> {
@@ -191,7 +184,7 @@ public class FileSystem implements ModuleFileSystem, DBFileSystem {
 	public List<ContentNode> listContent(final Path base, final String start) {
 		var startPath = base.resolve(start);
 
-		String folder = PathUtil.toRelativePath(startPath, contentBase).toString();
+		String folder = PathUtil.toRelativePath(startPath, contentBase);
 
 		if ("".equals(folder)) {
 			return metaData.listChildren("");
@@ -202,7 +195,7 @@ public class FileSystem implements ModuleFileSystem, DBFileSystem {
 	}
 
 	public List<ContentNode> listSections(final Path contentFile) {
-		String folder = PathUtil.toRelativePath(contentFile, contentBase).toString();
+		String folder = PathUtil.toRelativePath(contentFile, contentBase);
 		String filename = contentFile.getFileName().toString();
 		filename = filename.substring(0, filename.length() - 3);
 
@@ -212,7 +205,7 @@ public class FileSystem implements ModuleFileSystem, DBFileSystem {
 		final Pattern isOrderedSectionOf = Constants.SECTION_ORDERED_OF_PATTERN.apply(filename);
 
 		if ("".equals(folder)) {
-			metaData.tree().values()
+			metaData.getTree().values()
 					.stream()
 					.filter(node -> !node.isHidden())
 					.filter(node -> node.isPublished())
@@ -239,7 +232,6 @@ public class FileSystem implements ModuleFileSystem, DBFileSystem {
 							nodes.add(node);
 						});
 			}
-
 		}
 
 		return nodes;
@@ -267,7 +259,18 @@ public class FileSystem implements ModuleFileSystem, DBFileSystem {
 	}
 
 	public void init() throws IOException {
+		init(MetaData.Type.MEMORY);
+	}
+	
+	public void init(MetaData.Type metaDataType) throws IOException {
 		log.debug("init filesystem");
+		
+		if (MetaData.Type.PERSISTENT.equals(metaDataType)) {
+			this.metaData = new PersistentMetaData(this.hostBaseDirectory);
+		} else {
+			this.metaData = new MemoryMetaData();
+		}
+		this.metaData.open();
 
 		this.contentBase = resolve("content/");
 		var templateBase = resolve("templates/");
