@@ -22,14 +22,11 @@ package com.condation.cms.templates.functions.impl;
  */
 
 import com.condation.cms.api.db.ContentNode;
-import com.condation.cms.api.db.DB;
-import com.condation.cms.api.db.cms.ReadOnlyFile;
 import com.condation.cms.api.feature.features.InjectorFeature;
+import com.condation.cms.api.feature.features.RepositoryFeature;
 import com.condation.cms.api.request.RequestContext;
 import com.condation.cms.content.ContentRenderer;
-import com.condation.cms.content.SectionEntry;
 import java.io.IOException;
-import java.util.List;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 
@@ -47,13 +44,12 @@ public class NodeFunction extends AbstractNodeFunction {
 	}
 	
 	@Override
-	protected void extendMap(Map<String, Object> node, ReadOnlyFile contentFile) {
+	protected void extendMap(Map<String, Object> node, ContentNode contentNode) {
 		try {
-			var db = requestContext.get(InjectorFeature.class).injector().getInstance(DB.class);
+			var contentRepository = requestContext.get(RepositoryFeature.class).contentRepository();
 			var contentRenderer = requestContext.get(InjectorFeature.class).injector().getInstance(ContentRenderer.class);
-			List<ContentNode> sectionEntryList = db.getContent().listSectionEntries(contentFile);
-			
-			Map<String, List<SectionEntry>> sectionEntries = contentRenderer.renderSectionEntries(sectionEntryList, requestContext);
+			var sectionEntries = contentRenderer.renderSections(
+					contentRepository.sections(contentNode), requestContext);
 			node.put("sections", sectionEntries);
 		} catch (IOException iOException) {
 			log.error("error loading sections", iOException);

@@ -27,18 +27,19 @@ import static org.mockito.Mockito.when;
 
 import com.condation.cms.api.configuration.configs.CollectionConfiguration;
 import com.condation.cms.api.configuration.configs.CollectionDefinition;
-import com.condation.cms.api.db.DB;
 import com.condation.cms.api.db.collection.Collection;
-import com.condation.cms.api.db.collection.Collections;
+import com.condation.cms.api.repository.CollectionAccess;
+import com.condation.cms.api.repository.MutableCollectionRepository;
 import com.condation.cms.core.serivce.ServiceRegistry;
-import com.condation.cms.core.serivce.impl.SiteDBService;
+import com.condation.cms.core.serivce.impl.SiteCollectionRepositoryService;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
-class ReferencedCollectionsTest {
+class ReferencedCollectionRepositoryTest {
 
 	@AfterEach
 	void clearServices() {
@@ -47,43 +48,42 @@ class ReferencedCollectionsTest {
 
 	@Test
 	void resolvesReferencedCollectionsThroughTheSourceSite() {
-		var local = mock(Collections.class);
+		var local = mock(MutableCollectionRepository.class);
 		when(local.names()).thenReturn(Set.of("local"));
-		var sourceCollections = mock(Collections.class);
+		var sourceCollections = mock(MutableCollectionRepository.class);
 		var sourceCollection = mock(Collection.class);
-		when(sourceCollections.isLocal("shared")).thenReturn(true);
+		when(sourceCollections.access("shared")).thenReturn(CollectionAccess.READ_WRITE);
 		when(sourceCollections.collection("shared")).thenReturn(sourceCollection);
-		var sourceDB = mock(DB.class);
-		when(sourceDB.getCollections()).thenReturn(sourceCollections);
 		ServiceRegistry.getInstance().register(
 				"content-site",
-				SiteDBService.class,
-				new SiteDBService(sourceDB));
+				SiteCollectionRepositoryService.class,
+				new SiteCollectionRepositoryService(sourceCollections, sourceCollections));
 		var definitions = new ConcurrentHashMap<String, CollectionDefinition>();
 		definitions.put("shared", new CollectionDefinition("shared", "content-site", null));
-		var collections = new ReferencedCollections(
+		var collections = new ReferencedCollectionRepository(
 				"consumer-site",
 				local,
 				new CollectionConfiguration(definitions));
 
 		Assertions.assertThat(collections.names()).containsExactlyInAnyOrder("local", "shared");
-		Assertions.assertThat(collections.isLocal("shared")).isFalse();
+		Assertions.assertThat(collections.access("shared")).isEqualTo(CollectionAccess.READ_ONLY);
 		Assertions.assertThat(collections.collection("shared")).isSameAs(sourceCollection);
-		Assertions.assertThatThrownBy(() -> collections.refresh("shared", "item"))
+		Assertions.assertThatThrownBy(() -> collections.save("shared", "item", Map.of(), "body"))
 				.isInstanceOf(UnsupportedOperationException.class)
 				.hasMessageContaining("read-only");
 	}
 
 	@Test
-	void usesReloadedConfigurationWithoutRecreatingTheCollectionsFacade() {
-		var local = mock(Collections.class);
+	void usesReloadedConfigurationWithoutRecreatingTheRepository() throws Exception {
+		var local = mock(MutableCollectionRepository.class);
 		var localCollection = mock(Collection.class);
 		when(local.names()).thenReturn(Set.of("shared"));
+		when(local.access("shared")).thenReturn(CollectionAccess.READ_WRITE);
 		when(local.collection("shared")).thenReturn(localCollection);
 		var definitions = new ConcurrentHashMap<String, CollectionDefinition>();
 		definitions.put("shared", new CollectionDefinition("shared", "content-site", null));
 		var configuration = new CollectionConfiguration(definitions);
-		var collections = new ReferencedCollections(
+		var collections = new ReferencedCollectionRepository(
 				"consumer-site",
 				local,
 				configuration);
@@ -91,9 +91,9 @@ class ReferencedCollectionsTest {
 		definitions.put("shared", new CollectionDefinition("shared", null));
 		configuration.replaceCollections(definitions);
 
-		Assertions.assertThat(collections.isLocal("shared")).isTrue();
+		Assertions.assertThat(collections.access("shared")).isEqualTo(CollectionAccess.READ_WRITE);
 		Assertions.assertThat(collections.collection("shared")).isSameAs(localCollection);
-		collections.refresh("shared", "item");
-		verify(local).refresh("shared", "item");
+		collections.save("shared", "item", Map.of(), "body");
+		verify(local).save("shared", "item", Map.of(), "body");
 	}
 }

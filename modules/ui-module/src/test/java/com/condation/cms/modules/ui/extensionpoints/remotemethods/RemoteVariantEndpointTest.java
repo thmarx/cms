@@ -21,30 +21,24 @@ package com.condation.cms.modules.ui.extensionpoints.remotemethods;
  * #L%
  */
 
-import com.condation.cms.api.Constants;
-import com.condation.cms.api.db.Content;
 import com.condation.cms.api.db.ContentNode;
-import com.condation.cms.api.db.DB;
-import com.condation.cms.api.db.DBFileSystem;
 import com.condation.cms.api.eventbus.EventBus;
-import com.condation.cms.api.feature.features.DBFeature;
 import com.condation.cms.api.feature.features.EventBusFeature;
 import com.condation.cms.api.module.SiteModuleContext;
+import com.condation.cms.api.repository.ContentRepository;
+import com.condation.cms.api.repository.MutableContentRepository;
 import com.condation.cms.api.ui.rpc.RPCException;
 import com.condation.cms.api.variants.Variant;
+import com.condation.cms.api.variants.VariantContext;
 import com.condation.cms.content.ConfigurableVariantSelector;
-import com.condation.cms.content.VariantResolver;
 import com.condation.cms.content.VariantSelectorConfigurationRepository;
 import com.condation.cms.modules.ui.extensionpoints.remotemethods.dto.VariantDto;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -61,19 +55,10 @@ class RemoteVariantEndpointTest {
 	private SiteModuleContext moduleContext;
 
 	@Mock
-	private DB db;
-
-	@Mock
-	private Content content;
-
-	@Mock
-	private DBFileSystem fileSystem;
-
-	@Mock
 	private EventBus eventBus;
 
 	@Mock
-	private VariantResolver variantResolver;
+	private MutableContentRepository contentRepository;
 
 	@Mock
 	private ConfigurableVariantSelector configurableVariantSelector;
@@ -83,15 +68,17 @@ class RemoteVariantEndpointTest {
 
 	private RemoteVariantEndpoint endpoint;
 
-	@TempDir
-	private Path tempDir;
-
 	@BeforeEach
 	void setUp() {
 		endpoint = new RemoteVariantEndpoint() {
 			@Override
-			protected VariantResolver getVariantResolver(DB db) {
-				return variantResolver;
+			protected ContentRepository getContentRepository(Map<String, Object> parameters) {
+				return contentRepository;
+			}
+
+			@Override
+			protected MutableContentRepository getMutableContentRepository(Map<String, Object> parameters) {
+				return contentRepository;
 			}
 
 			@Override
@@ -105,11 +92,7 @@ class RemoteVariantEndpointTest {
 			}
 		};
 		endpoint.setContext(moduleContext);
-		lenient().when(moduleContext.get(DBFeature.class)).thenReturn(new DBFeature(db));
 		lenient().when(moduleContext.get(EventBusFeature.class)).thenReturn(new EventBusFeature(eventBus));
-		lenient().when(db.getContent()).thenReturn(content);
-		lenient().when(db.getFileSystem()).thenReturn(fileSystem);
-		lenient().when(fileSystem.resolve(Constants.Folders.CONTENT)).thenReturn(tempDir);
 	}
 
 	@Test
@@ -128,13 +111,13 @@ class RemoteVariantEndpointTest {
 				"/.variants/about/campaign/about",
 				Map.of("title", "Campaign")
 		);
-		when(content.byPath("about.md")).thenReturn(Optional.of(node));
+		when(contentRepository.get("about.md")).thenReturn(Optional.of(node));
 		var variants = List.of(
 				new Variant("summer", summerNode),
 				new Variant("campaign", campaignNode)
 		);
-		when(variantResolver.resolveContext(node)).thenReturn(
-				new VariantResolver.VariantContext(node, Optional.empty(), variants)
+		when(contentRepository.variantContext(node)).thenReturn(
+				new VariantContext(node, Optional.empty(), variants)
 		);
 
 		@SuppressWarnings("unchecked")
@@ -164,9 +147,9 @@ class RemoteVariantEndpointTest {
 				Map.of("title", "Summer")
 		);
 		var variants = List.of(new Variant("summer", summer));
-		when(content.byPath(summer.path())).thenReturn(Optional.of(summer));
-		when(variantResolver.resolveContext(summer)).thenReturn(
-				new VariantResolver.VariantContext(canonical, Optional.of("summer"), variants)
+		when(contentRepository.get(summer.path())).thenReturn(Optional.of(summer));
+		when(contentRepository.variantContext(summer)).thenReturn(
+				new VariantContext(canonical, Optional.of("summer"), variants)
 		);
 
 		@SuppressWarnings("unchecked")
@@ -182,9 +165,9 @@ class RemoteVariantEndpointTest {
 	@Test
 	void getReturnsEmptyListWhenNodeHasNoVariants() throws RPCException {
 		var node = node("about.md", "/about", Map.of());
-		when(content.byPath("about.md")).thenReturn(Optional.of(node));
-		when(variantResolver.resolveContext(node)).thenReturn(
-				new VariantResolver.VariantContext(node, Optional.empty(), List.of())
+		when(contentRepository.get("about.md")).thenReturn(Optional.of(node));
+		when(contentRepository.variantContext(node)).thenReturn(
+				new VariantContext(node, Optional.empty(), List.of())
 		);
 
 		@SuppressWarnings("unchecked")
@@ -204,8 +187,8 @@ class RemoteVariantEndpointTest {
 
 	@Test
 	void getReturnsNotFoundForUnknownNode() {
-		when(content.byPath("missing.md")).thenReturn(Optional.empty());
-		when(content.byUrl("missing.md")).thenReturn(Optional.empty());
+		when(contentRepository.get("missing.md")).thenReturn(Optional.empty());
+		when(contentRepository.findByUrl("missing.md")).thenReturn(Optional.empty());
 
 		assertThatThrownBy(() -> endpoint.get(Map.of("uri", "missing.md")))
 				.isInstanceOf(RPCException.class)
@@ -217,7 +200,7 @@ class RemoteVariantEndpointTest {
 	@Test
 	void getSelectorsReturnsConfigurationAndAvailableStrategies() throws RPCException {
 		var node = node("about.md", "/about", Map.of());
-		when(content.byPath("about.md")).thenReturn(Optional.of(node));
+		when(contentRepository.get("about.md")).thenReturn(Optional.of(node));
 		when(selectorConfigurationRepository.getSelectorId(node)).thenReturn("audience");
 		when(configurableVariantSelector.availableSelectors()).thenReturn(Map.of(
 				"date-range",
@@ -238,7 +221,7 @@ class RemoteVariantEndpointTest {
 	@Test
 	void setSelectorPersistsConfigurationForPage() throws Exception {
 		var node = node("about.md", "/about", Map.of());
-		when(content.byPath("about.md")).thenReturn(Optional.of(node));
+		when(contentRepository.get("about.md")).thenReturn(Optional.of(node));
 		when(configurableVariantSelector.hasSelector("audience")).thenReturn(true);
 
 		var result = endpoint.setSelector(Map.of("uri", "about.md", "selector", "audience"));
@@ -255,20 +238,15 @@ class RemoteVariantEndpointTest {
 				"/.variants/about/summer/about",
 				Map.of("title", "Summer")
 		);
-		var variantFolder = tempDir.resolve(".variants/about/summer");
-		Files.createDirectories(variantFolder);
-		Files.writeString(variantFolder.resolve("about.md"), "variant");
-		Files.writeString(variantFolder.resolve("about.main.hero.md"), "section");
-		var configuration = tempDir.resolve(".variants/about/variants.yaml");
-		Files.writeString(configuration, "selector: date-range");
-		when(content.byPath(canonical.path())).thenReturn(Optional.of(canonical));
-		when(variantResolver.resolveContext(canonical)).thenReturn(
-				new VariantResolver.VariantContext(
+		when(contentRepository.get(canonical.path())).thenReturn(Optional.of(canonical));
+		when(contentRepository.variantContext(canonical)).thenReturn(
+				new VariantContext(
 						canonical,
 						Optional.empty(),
 						List.of(new Variant("summer", summer))
 				)
 		);
+		when(contentRepository.resourceExists(".variants/about/summer")).thenReturn(true);
 
 		@SuppressWarnings("unchecked")
 		var result = (Map<String, Object>) endpoint.delete(Map.of(
@@ -279,17 +257,15 @@ class RemoteVariantEndpointTest {
 		assertThat(result)
 				.containsEntry("id", "summer")
 				.containsEntry("url", "/about?preview=manager");
-		assertThat(variantFolder).doesNotExist();
-		assertThat(configuration).exists();
-		verify(fileSystem).flushContentChanges();
+		verify(contentRepository).deleteRecursively(".variants/about/summer");
 	}
 
 	@Test
 	void deleteRejectsUnknownVariant() {
 		var canonical = node("about.md", "/about", Map.of());
-		when(content.byPath(canonical.path())).thenReturn(Optional.of(canonical));
-		when(variantResolver.resolveContext(canonical)).thenReturn(
-				new VariantResolver.VariantContext(canonical, Optional.empty(), List.of())
+		when(contentRepository.get(canonical.path())).thenReturn(Optional.of(canonical));
+		when(contentRepository.variantContext(canonical)).thenReturn(
+				new VariantContext(canonical, Optional.empty(), List.of())
 		);
 
 		assertThatThrownBy(() -> endpoint.delete(Map.of(

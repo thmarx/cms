@@ -23,12 +23,10 @@ package com.condation.cms.content;
 
 import com.condation.cms.api.Constants;
 import com.condation.cms.api.SiteProperties;
-import com.condation.cms.api.content.ContentParser;
 import com.condation.cms.api.db.ContentNode;
 import com.condation.cms.api.db.DB;
 import com.condation.cms.api.db.Page;
 import com.condation.cms.api.db.collection.CollectionItem;
-import com.condation.cms.api.db.cms.ReadOnlyFile;
 import com.condation.cms.api.db.taxonomy.Taxonomy;
 import com.condation.cms.api.extensions.ContentQueryOperatorExtensionPoint;
 import com.condation.cms.api.extensions.TemplateModelExtendingExtensionPoint;
@@ -44,9 +42,12 @@ import com.condation.cms.api.feature.features.SiteMediaServiceFeature;
 import com.condation.cms.api.messages.MessageSource;
 import com.condation.cms.api.model.ListNode;
 import com.condation.cms.api.request.RequestContext;
+import com.condation.cms.api.repository.ContentDocument;
+import com.condation.cms.api.repository.ContentRepository;
+import com.condation.cms.api.repository.CollectionRepository;
+import com.condation.cms.api.repository.Section;
 import com.condation.cms.api.template.TemplateEngine;
-import com.condation.cms.api.utils.PathUtil;
-import com.condation.cms.api.utils.SectionUtil;
+import com.condation.cms.api.utils.MapUtil;
 import com.condation.cms.content.pipeline.ContentPipelineFactory;
 import com.condation.cms.content.views.model.View;
 import com.condation.cms.api.content.MapAccess;
@@ -73,22 +74,36 @@ import java.util.Optional;
 import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
  *
  * @author t.marx
  */
-@RequiredArgsConstructor
 @Slf4j
 public class DefaultContentRenderer implements ContentRenderer {
 
-	private final ContentParser contentParser;
 	private final Supplier<TemplateEngine> templates;
 	private final DB db;
 	private final SiteProperties siteProperties;
 	private final ModuleManager moduleManager;
+	private final ContentRepository contentRepository;
+	private final CollectionRepository collectionRepository;
+
+	public DefaultContentRenderer(
+			Supplier<TemplateEngine> templates,
+			DB db,
+			SiteProperties siteProperties,
+			ModuleManager moduleManager,
+			ContentRepository contentRepository,
+			CollectionRepository collectionRepository) {
+		this.templates = templates;
+		this.db = db;
+		this.siteProperties = siteProperties;
+		this.moduleManager = moduleManager;
+		this.contentRepository = contentRepository;
+		this.collectionRepository = collectionRepository;
+	}
 
 	private record ResolvedRenderInput(
 			String uri,
@@ -99,45 +114,111 @@ public class DefaultContentRenderer implements ContentRenderer {
 	}
 
 	@Override
-	public String render(final ReadOnlyFile contentFile, final RequestContext context) throws IOException {
-		return render(contentFile, context, Collections.emptyMap());
+	public String render(
+			ContentDocument document,
+			RequestContext context,
+			Map<String, List<SectionEntry>> sectionEntries) throws IOException {
+		return renderResolved(
+				document.node(),
+				context,
+				new ResolvedRenderInput(
+						document.node().path(),
+						sectionEntries,
+						document.node().data(),
+						document.content(),
+						Optional.of(document.node())),
+				model -> {
+				});
 	}
 
 	@Override
-	public String render(final ReadOnlyFile contentFile, final RequestContext context, final Map<String, List<SectionEntry>> sectionEntries) throws IOException {
-		var content = contentParser.parse(contentFile);
+	public Map<String, List<SectionEntry>> renderSections(
+			List<Section> sections,
+			RequestContext context) throws IOException {
+		if (sections.isEmpty()) {
+			return Collections.emptyMap();
+		}
 
-		return render(contentFile, context, sectionEntries, content.meta(), content.content(), (model) -> {
-		});
-	}
-
-	@Override
-	public String renderTaxonomy(
-			final Optional<ReadOnlyFile> contentFileOpt,
-			final Taxonomy taxonomy, Optional<String> taxonomyValue, final RequestContext context, 
-			final Map<String, Object> meta, final Page<ListNode> page, final Map<String, List<SectionEntry>> sectionEntries) throws IOException {
-		var contentFile = contentFileOpt.orElseGet(() -> db.getFileSystem().contentBase().resolve("index.md"));
-		var content = contentFileOpt.isPresent() ? 
-				contentParser.parse(contentFileOpt.get()).content()
-				: "";
-
-		return render(contentFile, context, sectionEntries, meta, content, (model) -> {
-			model.values.put("taxonomy", taxonomy);
-			model.values.put("taxonomy_values", db.getTaxonomies().values(taxonomy));
-			if (taxonomyValue.isPresent()) {
-				model.values.put("taxonomy_value", taxonomyValue.get());
+		Map<String, List<SectionEntry>> renderedSections = new HashMap<>();
+		for (var section : sections) {
+			try {
+				var sectionNode = contentRepository.get(section.id());
+				var renderedContent = renderResolved(
+						sectionNode.orElse(null),
+						context,
+						new ResolvedRenderInput(
+								section.id(),
+								Collections.emptyMap(),
+								section.data(),
+								section.content(),
+								sectionNode),
+						model -> {
+						});
+				var index = MapUtil.getValue(
+						section.data(),
+						Constants.MetaFields.LAYOUT_ORDER,
+						Constants.DEFAULT_SECTION_ENTRY_LAYOUT_ORDER);
+				renderedSections.computeIfAbsent(section.name(), ignored -> new ArrayList<>())
+						.add(new SectionEntry(section.name(), index, renderedContent, section.data()));
+			} catch (Exception ex) {
+				log.error("error rendering section {}", section.id(), ex);
 			}
-			model.values.put("page", page);
-
-		});
+		}
+		renderedSections.values().forEach(entries ->
+				entries.sort((first, second) -> Integer.compare(first.index(), second.index())));
+		return renderedSections;
 	}
 
 	@Override
-	public String renderView(final ReadOnlyFile viewFile, final View view, final ContentNode contentNode, final RequestContext requestContext, final Page<ListNode> page) throws IOException {
-		return render(viewFile, requestContext, Collections.emptyMap(),
-				contentNode.data(), "", (model) -> {
-			model.values.put("page", page);
-		});
+	public String renderTaxonomyContent(
+			Optional<ContentDocument> document,
+			Taxonomy taxonomy,
+			Optional<String> taxonomyValue,
+			RequestContext context,
+			Map<String, Object> meta,
+			Page<ListNode> page,
+			Map<String, List<SectionEntry>> sectionEntries) throws IOException {
+		var rawContent = document.map(ContentDocument::content).orElse("");
+		var node = document.map(ContentDocument::node);
+		return renderResolved(
+				node.orElse(null),
+				context,
+				new ResolvedRenderInput(
+						node.map(ContentNode::path).orElse("index.md"),
+						sectionEntries,
+						meta,
+						rawContent,
+						node),
+				model -> extendTaxonomyModel(model, taxonomy, taxonomyValue, page));
+	}
+
+	private void extendTaxonomyModel(
+			TemplateEngine.Model model,
+			Taxonomy taxonomy,
+			Optional<String> taxonomyValue,
+			Page<ListNode> page) {
+		model.values.put("taxonomy", taxonomy);
+		model.values.put("taxonomy_values", db.getTaxonomies().values(taxonomy));
+		taxonomyValue.ifPresent(value -> model.values.put("taxonomy_value", value));
+		model.values.put("page", page);
+	}
+
+	@Override
+	public String renderView(
+			ContentDocument document,
+			View view,
+			RequestContext requestContext,
+			Page<ListNode> page) throws IOException {
+		return renderResolved(
+				document.node(),
+				requestContext,
+				new ResolvedRenderInput(
+						document.node().path(),
+						Collections.emptyMap(),
+						document.node().data(),
+						"",
+						Optional.of(document.node())),
+				model -> model.values.put("page", page));
 	}
 
 	private String renderContent(final String rawContent, final RequestContext context, final TemplateEngine.Model model) {
@@ -148,7 +229,6 @@ public class DefaultContentRenderer implements ContentRenderer {
 
 	@Override
 	public String renderCollection(
-			ReadOnlyFile collectionFile,
 			ContentNode collectionNode,
 			CollectionItem item,
 			String template,
@@ -156,7 +236,7 @@ public class DefaultContentRenderer implements ContentRenderer {
 		var meta = new HashMap<>(item.meta());
 		meta.put("template", template);
 		return renderResolved(
-				collectionFile,
+				collectionNode,
 				context,
 				new ResolvedRenderInput(
 						collectionNode.url(),
@@ -166,32 +246,12 @@ public class DefaultContentRenderer implements ContentRenderer {
 						Optional.of(collectionNode)),
 				model -> {
 					model.values.put("collection_item", item);
-					model.values.put("collection", db.getCollections().collection(item.collection()));
+					model.values.put("collection", collectionRepository.collection(item.collection()));
 				});
 	}
 
-	@Override
-	public String render(final ReadOnlyFile contentFile, final RequestContext context,
-			final Map<String, List<SectionEntry>> sectionEntries,
-			final Map<String, Object> meta, final String rawContent, final Consumer<TemplateEngine.Model> modelExtending
-	) throws IOException {
-		var uri = PathUtil.toRelativeFile(contentFile, db.getFileSystem().contentBase());
-		
-		Optional<ContentNode> contentNode = db.getContent().byUri(uri);
-		return renderResolved(
-				contentFile,
-				context,
-				new ResolvedRenderInput(
-						uri,
-						sectionEntries,
-						meta,
-						rawContent,
-						contentNode),
-				modelExtending);
-	}
-
 	private String renderResolved(
-			ReadOnlyFile contentFile,
+			ContentNode currentNode,
 			RequestContext context,
 			ResolvedRenderInput input,
 			Consumer<TemplateEngine.Model> modelExtending) throws IOException {
@@ -201,8 +261,7 @@ public class DefaultContentRenderer implements ContentRenderer {
 		var rawContent = input.rawContent();
 		var contentNode = input.contentNode();
 		TemplateEngine.Model model = new TemplateEngine.Model(
-				contentFile, 
-				contentNode.orElse(null),
+				contentNode.orElse(currentNode),
 				context);
 
 		modelExtending.accept(model);
@@ -217,13 +276,13 @@ public class DefaultContentRenderer implements ContentRenderer {
 		
 		namespace.add(Constants.TemplateNamespaces.NODE, "properties", new MapAccess((NodeProperties.createNodeProperties(contentNode.orElse(null), siteProperties))));
 		
-		NavigationFunction navigationFunction = createNavigationFunction(contentFile, context);
+		NavigationFunction navigationFunction = createNavigationFunction(currentNode, context);
 		namespace.add(Constants.TemplateNamespaces.CMS, "navigation", navigationFunction);
 		
-		NodeListFunctionBuilder nodeListFunction = createNodeListFunction(contentFile, context);
+		NodeListFunctionBuilder nodeListFunction = createNodeListFunction(currentNode, context);
 		namespace.add(Constants.TemplateNamespaces.CMS, "nodeList", nodeListFunction);
 		
-		QueryFunction queryFunction = createQueryFunction(contentFile, context);
+		QueryFunction queryFunction = createQueryFunction(currentNode, context);
 		namespace.add(Constants.TemplateNamespaces.CMS, "query", queryFunction);
 		namespace.add(Constants.TemplateNamespaces.CMS, "geo", new GeoFunction());
 		
@@ -282,7 +341,7 @@ public class DefaultContentRenderer implements ContentRenderer {
 		return new MarkdownFunction(context.get(MarkdownRendererFeature.class).markdownRenderer());
 	}
 
-	protected QueryFunction createQueryFunction(final ReadOnlyFile contentFile, final RequestContext context) {
+	protected QueryFunction createQueryFunction(final ContentNode currentNode, final RequestContext context) {
 
 		Map<String, BiPredicate<Object, Object>> customOperators = new HashMap<>();
 
@@ -292,19 +351,20 @@ public class DefaultContentRenderer implements ContentRenderer {
 				.extensions(ContentQueryOperatorExtensionPoint.class)
 				.forEach(extension -> customOperators.put(extension.getOperator(), extension.getPredicate()));
 
-		var queryFn = new QueryFunction(db, contentFile, context, customOperators);
+		var queryFn = new QueryFunction(
+				contentRepository, currentNode, context, customOperators);
 		queryFn.setContentType(siteProperties.defaultContentType());
 		return queryFn;
 	}
 
-	protected NodeListFunctionBuilder createNodeListFunction(final ReadOnlyFile contentFile, final RequestContext context) {
-		var nlFn = new NodeListFunctionBuilder(db, contentFile, context);
+	protected NodeListFunctionBuilder createNodeListFunction(final ContentNode currentNode, final RequestContext context) {
+		var nlFn = new NodeListFunctionBuilder(contentRepository, currentNode, context);
 		nlFn.contentType(siteProperties.defaultContentType());
 		return nlFn;
 	}
 
-	protected NavigationFunction createNavigationFunction(final ReadOnlyFile contentFile, final RequestContext context) {
-		var navFn = new NavigationFunction(db, contentFile, context);
+	protected NavigationFunction createNavigationFunction(final ContentNode currentNode, final RequestContext context) {
+		var navFn = new NavigationFunction(contentRepository, currentNode, context);
 		navFn.contentType(siteProperties.defaultContentType());
 		return navFn;
 	}
@@ -333,39 +393,6 @@ public class DefaultContentRenderer implements ContentRenderer {
 				entry.getValue()
 			));
 		});
-	}
-
-	@Override
-	public Map<String, List<SectionEntry>> renderSectionEntries(final List<ContentNode> sectionEntryNodes, final RequestContext context) throws IOException {
-
-		if (sectionEntryNodes.isEmpty()) {
-			return Collections.emptyMap();
-		}
-
-		Map<String, List<SectionEntry>> sectionEntries = new HashMap<>();
-
-		final ReadOnlyFile contentBase = db.getFileSystem().contentBase();
-		sectionEntryNodes.forEach(node -> {
-			try {
-				var sectionEntryPath = contentBase.resolve(node.uri());
-				var content = render(sectionEntryPath, context);
-				var name = SectionUtil.getSectionName(node.name());
-				var index = node.getMetaValue(Constants.MetaFields.LAYOUT_ORDER, Constants.DEFAULT_SECTION_ENTRY_LAYOUT_ORDER);
-
-				if (!sectionEntries.containsKey(name)) {
-					sectionEntries.put(name, new ArrayList<>());
-				}
-
-				sectionEntries.get(name).add(new SectionEntry(name, index, content, node.data()));
-			} catch (Exception ex) {
-				log.error("error render sectionEntries", ex);
-			}
-
-		});
-
-		sectionEntries.values().forEach(list -> list.sort((s1, s2) -> Integer.compare(s1.index(), s2.index())));
-
-		return sectionEntries;
 	}
 
 }

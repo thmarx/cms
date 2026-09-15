@@ -21,7 +21,7 @@ package com.condation.cms.modules.system.api.handlers.v1;
  * #L%
  */
 
-import com.condation.cms.api.db.DB;
+import com.condation.cms.api.repository.ContentRepository;
 import com.condation.cms.api.extensions.http.HttpHandler;
 import static com.condation.cms.core.configuration.GSONProvider.GSON;
 import com.condation.cms.modules.system.api.helpers.QueryParser;
@@ -36,11 +36,11 @@ import org.eclipse.jetty.util.Callback;
 
 public class QueryHandler implements HttpHandler {
 
-    private final DB db;
+	private final ContentRepository contentRepository;
     private final QueryParser queryParser;
 
-    public QueryHandler(final DB db) {
-        this.db = db;
+	public QueryHandler(final ContentRepository contentRepository) {
+		this.contentRepository = contentRepository;
         this.queryParser = new QueryParser();
     }
 
@@ -48,7 +48,7 @@ public class QueryHandler implements HttpHandler {
     public boolean handle(Request request, Response response, Callback callback) throws Exception {
         try {
             String body = Content.Source.asString(request);
-            Object result = queryParser.parse(db, body);
+			Object result = queryParser.parse(contentRepository, body);
 
             response.getHeaders().add(HttpHeader.CONTENT_TYPE, "application/json; charset=utf-8");
             Content.Sink.write(response, true, GSON.toJson(result), callback);

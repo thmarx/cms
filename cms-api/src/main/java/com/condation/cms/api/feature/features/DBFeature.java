@@ -30,7 +30,7 @@ import com.condation.cms.api.feature.Feature;
  *
  * @author t.marx
  */
-@FeatureScope({FeatureScope.Scope.GLOBAL, FeatureScope.Scope.MODULE})
+@FeatureScope({FeatureScope.Scope.SITE, FeatureScope.Scope.MODULE})
 public record DBFeature(DB db) implements Feature {
 
 }

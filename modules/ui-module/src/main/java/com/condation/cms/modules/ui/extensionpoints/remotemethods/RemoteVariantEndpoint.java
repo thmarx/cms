@@ -24,17 +24,16 @@ package com.condation.cms.modules.ui.extensionpoints.remotemethods;
 import com.condation.cms.api.auth.Permissions;
 import com.condation.cms.api.Constants;
 import com.condation.cms.api.db.ContentNode;
-import com.condation.cms.api.db.DB;
 import com.condation.cms.api.eventbus.events.ReIndexContentMetaDataEvent;
 import com.condation.cms.api.feature.features.EventBusFeature;
 import com.condation.cms.api.feature.features.InjectorFeature;
 import com.condation.cms.api.feature.features.WorkflowFeature;
+import com.condation.cms.api.repository.ContentRepository;
 import com.condation.cms.api.ui.annotations.RemoteMethod;
 import com.condation.cms.api.ui.extensions.UIRemoteMethodExtensionPoint;
 import com.condation.cms.api.ui.rpc.RPCException;
 import com.condation.cms.api.variants.Variant;
 import com.condation.cms.api.utils.PathUtil;
-import com.condation.cms.content.VariantResolver;
 import com.condation.cms.content.ConfigurableVariantSelector;
 import com.condation.cms.content.VariantSelectorConfigurationRepository;
 import com.condation.cms.core.content.io.ContentFileParser;
@@ -69,8 +68,7 @@ public class RemoteVariantEndpoint extends AbstractRemoteMethodeExtension {
 			throw new RPCException(400, "uri must not be blank");
 		}
 
-		var db = getDB(parameters);
-		var node = findContentNode(db, uri);
+		var node = findContentNode(parameters, uri);
 		var configurableSelector = getConfigurableVariantSelector();
 		var repository = getVariantSelectorConfigurationRepository();
 
@@ -98,8 +96,7 @@ public class RemoteVariantEndpoint extends AbstractRemoteMethodeExtension {
 			throw new RPCException(400, "unknown variant selector");
 		}
 
-		var db = getDB(parameters);
-		var node = findContentNode(db, uri);
+		var node = findContentNode(parameters, uri);
 		try {
 			getVariantSelectorConfigurationRepository().setSelectorId(node, selectorId);
 			return Map.of("selector", selectorId);
@@ -121,9 +118,9 @@ public class RemoteVariantEndpoint extends AbstractRemoteMethodeExtension {
 			throw new RPCException(400, "uri, id and title must not be blank");
 		}
 
-		var db = getDB(parameters);
-		var requestedNode = findContentNode(db, uri);
-		var canonicalNode = getVariantResolver(db).resolveContext(requestedNode).canonical();
+		var repository = getMutableContentRepository(parameters);
+		var requestedNode = findContentNode(parameters, uri);
+		var canonicalNode = repository.variantContext(requestedNode).canonical();
 		var selectedTemplate = copyContent
 				? canonicalNode.getMetaValue(Constants.MetaFields.TEMPLATE, "")
 				: template;
@@ -134,42 +131,39 @@ public class RemoteVariantEndpoint extends AbstractRemoteMethodeExtension {
 				.noneMatch(pageTemplate -> pageTemplate.template().equals(selectedTemplate))) {
 			throw new RPCException(400, "unknown page template");
 		}
-		var contentBase = db.getFileSystem().resolve(Constants.Folders.CONTENT);
-		var canonicalFile = contentBase.resolve(canonicalNode.path());
 		var variantId = UIPathUtil.toValidFilename(id);
 		if (variantId.isBlank() || ".".equals(variantId) || "..".equals(variantId)) {
 			throw new RPCException(400, "invalid variant id");
 		}
 
-		var fileName = canonicalFile.getFileName().toString();
+		var canonicalPath = canonicalNode.path().replace('\\', '/');
+		var separator = canonicalPath.lastIndexOf('/');
+		var parent = separator < 0 ? "" : canonicalPath.substring(0, separator);
+		var fileName = separator < 0 ? canonicalPath : canonicalPath.substring(separator + 1);
 		var pageName = fileName.endsWith(".md")
 				? fileName.substring(0, fileName.length() - 3)
 				: fileName;
-		var variantFile = canonicalFile.getParent()
-				.resolve(".variants")
-				.resolve(pageName)
-				.resolve(variantId)
-				.resolve(fileName);
+		var variantFolder = join(parent, ".variants/" + pageName + "/" + variantId);
+		var variantFile = join(variantFolder, fileName);
 
 		try {
-			if (!UIPathUtil.isChild(contentBase, variantFile)) {
-				throw new RPCException(400, "invalid variant path");
-			}
-			if (Files.exists(variantFile)) {
+			if (repository.resourceExists(variantFile)) {
 				throw new RPCException(409, "variant already exists");
 			}
 
-			var body = copyContent ? new ContentFileParser(canonicalFile.toString()).getContent() : "";
+			var body = copyContent
+					? repository.load(canonicalNode).orElseThrow().content()
+					: "";
 			var sectionCopies = copyContent
-					? db.getContent().listSectionEntries(db.getFileSystem().contentBase().resolve(canonicalNode.path()))
+					? repository.sections(canonicalNode)
 							.stream()
 							.map(section -> new SectionCopy(
-									contentBase.resolve(section.path()),
-									variantFile.getParent().resolve(section.name())
+									section.data(), section.content(),
+									join(variantFolder, fileName(section.id()))
 							))
 							.toList()
 					: java.util.List.<SectionCopy>of();
-			if (sectionCopies.stream().anyMatch(copy -> Files.exists(copy.target()))) {
+			if (sectionCopies.stream().anyMatch(copy -> repository.resourceExists(copy.target()))) {
 				throw new RPCException(409, "variant section already exists");
 			}
 
@@ -181,38 +175,24 @@ public class RemoteVariantEndpoint extends AbstractRemoteMethodeExtension {
 			meta.put("createdAt", Date.from(Instant.now()));
 			meta.put("createdBy", getUserName());
 
-			Files.createDirectories(variantFile.getParent());
-			var createdFiles = new ArrayList<java.nio.file.Path>();
+			var createdFiles = new ArrayList<String>();
 			try {
-				YamlHeaderUpdater.saveMarkdownFileWithHeader(variantFile, meta, body);
+				repository.save(variantFile, meta, body);
 				createdFiles.add(variantFile);
 				for (var sectionCopy : sectionCopies) {
-					Files.copy(
-							sectionCopy.source(),
-							sectionCopy.target(),
-							StandardCopyOption.COPY_ATTRIBUTES
-					);
+					repository.save(sectionCopy.target(), sectionCopy.metadata(), sectionCopy.content());
 					createdFiles.add(sectionCopy.target());
 				}
 			} catch (Exception exception) {
 				for (var createdFile : createdFiles.reversed()) {
-					Files.deleteIfExists(createdFile);
+					repository.delete(createdFile);
 				}
 				throw exception;
 			}
 
-			var eventBus = getContext().get(EventBusFeature.class).eventBus();
-			for (var createdFile : createdFiles) {
-				eventBus.syncPublish(new ReIndexContentMetaDataEvent(
-						PathUtil.toRelativeFile(createdFile, contentBase)
-				));
-			}
-			db.getFileSystem().flushContentChanges();
-			var newUri = PathUtil.toRelativeFile(variantFile, contentBase);
-
 			return Map.of(
 					"id", variantId,
-					"uri", newUri,
+					"uri", variantFile,
 					"url", managerVariantPreviewUrl(canonicalNode.url(), variantId)
 			);
 		} catch (RPCException exception) {
@@ -231,32 +211,20 @@ public class RemoteVariantEndpoint extends AbstractRemoteMethodeExtension {
 			throw new RPCException(400, "uri and id must not be blank");
 		}
 
-		var db = getDB(parameters);
-		var requestedNode = findContentNode(db, uri);
-		var variantContext = getVariantResolver(db).resolveContext(requestedNode);
+		var repository = getMutableContentRepository(parameters);
+		var requestedNode = findContentNode(parameters, uri);
+		var variantContext = repository.variantContext(requestedNode);
 		var variant = variantContext.variants().stream()
 				.filter(candidate -> candidate.id().equals(variantId))
 				.findFirst()
 				.orElseThrow(() -> new RPCException(404, "variant not found"));
-		var contentBase = db.getFileSystem().resolve(Constants.Folders.CONTENT);
-		var variantFolder = contentBase.resolve(variant.node().path()).getParent();
+		var variantFolder = parentPath(variant.node().path());
 
 		try {
-			if (!UIPathUtil.isChild(contentBase, variantFolder)
-					|| !Files.exists(variantFolder)
-					|| !Files.isDirectory(variantFolder)) {
+			if (!repository.resourceExists(variantFolder)) {
 				throw new RPCException(404, "variant folder not found");
 			}
-			var folderUri = PathUtil.toRelativeFile(variantFolder, contentBase);
-			try (var paths = Files.walk(variantFolder)) {
-				for (var path : paths.sorted(Comparator.reverseOrder()).toList()) {
-					Files.delete(path);
-				}
-			}
-			getContext().get(EventBusFeature.class).eventBus().syncPublish(
-					new ReIndexContentMetaDataEvent(folderUri)
-			);
-			db.getFileSystem().flushContentChanges();
+			repository.deleteRecursively(variantFolder);
 
 			return Map.of(
 					"id", variantId,
@@ -277,9 +245,8 @@ public class RemoteVariantEndpoint extends AbstractRemoteMethodeExtension {
 			throw new RPCException(400, "uri must not be blank");
 		}
 
-		var db = getDB(parameters);
-		var contentNode = findContentNode(db, uri);
-		var variantContext = getVariantResolver(db).resolveContext(contentNode);
+		var contentNode = findContentNode(parameters, uri);
+		var variantContext = getContentRepository(parameters).variantContext(contentNode);
 		var variants = variantContext.variants()
 				.stream()
 				.sorted(Comparator.comparing(Variant::id))
@@ -306,18 +273,14 @@ public class RemoteVariantEndpoint extends AbstractRemoteMethodeExtension {
 		return result;
 	}
 
-	private ContentNode findContentNode(DB db, String uri) throws RPCException {
-		return db.getContent()
-				.byPath(uri)
-				.or(() -> db.getContent().byUrl(uri))
+	private ContentNode findContentNode(Map<String, Object> parameters, String uri) throws RPCException {
+		var repository = getContentRepository(parameters);
+		return repository.get(uri)
+				.or(() -> repository.findByUrl(uri))
 				.orElseThrow(() -> new RPCException(
 						404,
 						"content node for uri %s not found".formatted(uri)
 				));
-	}
-
-	protected VariantResolver getVariantResolver(DB db) {
-		return getContext().get(InjectorFeature.class).injector().getInstance(VariantResolver.class);
 	}
 
 	protected ConfigurableVariantSelector getConfigurableVariantSelector() {
@@ -347,6 +310,22 @@ public class RemoteVariantEndpoint extends AbstractRemoteMethodeExtension {
 				+ java.net.URLEncoder.encode(variantId, java.nio.charset.StandardCharsets.UTF_8);
 	}
 
-	private record SectionCopy(java.nio.file.Path source, java.nio.file.Path target) {
+	private static String join(String parent, String child) {
+		return parent.isEmpty() ? child : parent + "/" + child;
+	}
+
+	private static String parentPath(String path) {
+		var normalized = path.replace('\\', '/');
+		var separator = normalized.lastIndexOf('/');
+		return separator < 0 ? "" : normalized.substring(0, separator);
+	}
+
+	private static String fileName(String path) {
+		var normalized = path.replace('\\', '/');
+		var separator = normalized.lastIndexOf('/');
+		return separator < 0 ? normalized : normalized.substring(separator + 1);
+	}
+
+	private record SectionCopy(Map<String, Object> metadata, String content, String target) {
 	}
 }

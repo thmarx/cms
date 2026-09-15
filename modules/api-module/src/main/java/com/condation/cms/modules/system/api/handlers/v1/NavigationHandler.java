@@ -22,10 +22,10 @@ package com.condation.cms.modules.system.api.handlers.v1;
  */
 
 import com.condation.cms.api.Constants;
-import com.condation.cms.api.db.DB;
 import com.condation.cms.api.extensions.http.HttpHandler;
 import com.condation.cms.api.model.NavNode;
 import com.condation.cms.api.request.RequestContext;
+import com.condation.cms.api.repository.ContentRepository;
 import com.condation.cms.api.utils.HTTPUtil;
 import com.condation.cms.api.utils.RequestUtil;
 import com.condation.cms.content.template.functions.navigation.NavigationFunction;
@@ -46,12 +46,12 @@ import org.eclipse.jetty.util.Callback;
  */
 public class NavigationHandler implements HttpHandler {
 
-	private final DB db;
+	private final ContentRepository contentRepository;
 	private final RequestContext requestContext;
 	
-	public NavigationHandler(final DB db, final RequestContext requestContext) {
+	public NavigationHandler(final ContentRepository contentRepository, final RequestContext requestContext) {
 		this.requestContext = requestContext;
-		this.db = db;
+		this.contentRepository = contentRepository;
 	}
 
 	@Override
@@ -67,15 +67,19 @@ public class NavigationHandler implements HttpHandler {
 		var depth = Integer.valueOf(queryParameters.getOrDefault("depth", List.of("1")).getFirst());
 		var contentType = queryParameters.getOrDefault("contentType", List.of(Constants.ContentTypes.HTML)).getFirst();
 		
-		var startNode = db.getFileSystem().contentBase().resolve(uri);
+		var requestUrl = uri.isEmpty() ? "/" : "/" + uri;
+		var repositoryPath = uri;
+		var startNode = contentRepository.findByUrl(requestUrl)
+				.or(() -> contentRepository.get(repositoryPath));
 
-		if (startNode == null) {
+		if (startNode.isEmpty()) {
 			response.setStatus(404);
 			callback.succeeded();
 			return true;
 		}
 		
-		NavigationFunction navFN = new NavigationFunction(db, startNode, requestContext);
+		NavigationFunction navFN = new NavigationFunction(
+				contentRepository, startNode.get(), requestContext);
 		
 		var navNodes = navFN.contentType(contentType).list(start, depth);
 		

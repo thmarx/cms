@@ -33,6 +33,7 @@ import com.condation.cms.api.db.cms.ReadOnlyFile;
 import com.condation.cms.api.feature.features.DBFeature;
 import com.condation.cms.api.module.SiteModuleContext;
 import com.condation.cms.api.ui.rpc.RPCException;
+import com.condation.cms.api.repository.ContentRepository;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -67,6 +68,9 @@ public class RemotePageEnpointsTest {
 
     @Mock
     private ContentQuery query;
+
+	@Mock
+	private ContentRepository contentRepository;
     
     @Mock
     private ContentQuery.Sort sort;
@@ -87,7 +91,12 @@ public class RemotePageEnpointsTest {
 
     @BeforeEach
     public void setUp() {
-        pageEndpoints = new RemotePageEnpoints();
+        pageEndpoints = new RemotePageEnpoints() {
+			@Override
+			protected ContentRepository getContentRepository(Map<String, Object> parameters) {
+				return contentRepository;
+			}
+		};
         pageEndpoints.setContext(moduleContext);
 		
 		Mockito.lenient().when(db.getFileSystem()).thenReturn(fileSystem);
@@ -97,17 +106,14 @@ public class RemotePageEnpointsTest {
     @Test
     public void testFilterPages_Success() throws RPCException {
         // Arrange
-        when(moduleContext.get(DBFeature.class)).thenReturn(new DBFeature(db));
-        when(db.getContent()).thenReturn(content);
-        when(content.query(any())).thenReturn(query);
+        when(contentRepository.query()).thenReturn(query);
         
-        List<ContentNode> expectedNodes = List.of(mock(ContentNode.class));
+		List<ContentNode> expectedNodes = List.of(new ContentNode(
+				"test.md", "/test", "test.md", Map.of(Constants.MetaFields.TITLE, "Test")));
         when(query.page(Mockito.anyLong(), Mockito.anyLong())).thenReturn(new Page(0, 0, 0, 0, expectedNodes));
         when(query.orderby(anyString())).thenReturn(sort);
         when(sort.desc()).thenReturn(query);
 		
-		when(contentBase.resolve(Mockito.any())).thenReturn(contentFile);
-		when(contentBase.relativize(contentFile)).thenReturn(contentFile);
 		when(moduleContext.get(SitePropertiesFeature.class)).thenReturn(new SitePropertiesFeature(siteProperties));
 
         Map<String, Object> parameters = new HashMap<>();
@@ -144,9 +150,7 @@ public class RemotePageEnpointsTest {
     @Test
     public void testFilterPages_WithPagination() throws RPCException {
         // Arrange
-        when(moduleContext.get(DBFeature.class)).thenReturn(new DBFeature(db));
-        when(db.getContent()).thenReturn(content);
-        when(content.query(any())).thenReturn(query);
+        when(contentRepository.query()).thenReturn(query);
 
         Page<ContentNode> expectedPage = new Page<>(100, 10, 10, 1, new ArrayList<>());
         when(query.page(1L, 10L)).thenReturn(expectedPage);
@@ -165,10 +169,8 @@ public class RemotePageEnpointsTest {
     }
 
     @Test
-    public void testSearchPages_returnsRewrittenUriAndTitle() throws RPCException {
+    public void testSearchPages_returnsRewrittenUriAndTitle() {
         // Arrange
-        when(moduleContext.get(DBFeature.class)).thenReturn(new DBFeature(db));
-        when(db.getContent()).thenReturn(content);
         when(moduleContext.get(SitePropertiesFeature.class)).thenReturn(new SitePropertiesFeature(siteProperties));
 		when(siteProperties.contextPath()).thenReturn("/cms");
 
@@ -176,7 +178,10 @@ public class RemotePageEnpointsTest {
         meta.put(Constants.MetaFields.TITLE, "Superman Returns");
         ContentNode node = new ContentNode("test/test1.md", "/test/test1", "test1.md", meta);
 
-		when(content.searchByTitle("superman", VariantSearchMode.ORIGINAL)).thenReturn(List.of(node));
+		when(contentRepository.query()).thenReturn(query);
+		when(query.searchByTitle("superman")).thenReturn(query);
+		when(query.variants(VariantSearchMode.ORIGINAL)).thenReturn(query);
+		when(query.get()).thenReturn(List.of(node));
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("query", "superman");
 
@@ -194,20 +199,21 @@ public class RemotePageEnpointsTest {
 		assertThat(hits.get(0).title()).isEqualTo("Superman Returns");
 		assertThat(hits.get(0).uri()).isEqualTo("/cms/test/test1");
 		assertThat(hits.get(0).url()).isEqualTo("/test/test1");
-		verify(content).searchByTitle("superman", VariantSearchMode.ORIGINAL);
+		verify(query).searchByTitle("superman");
     }
 
     @Test
-    public void testSearchPages_missingTitle_fallsBackToEmptyString() throws RPCException {
+    public void testSearchPages_missingTitle_fallsBackToEmptyString() {
         // Arrange
-        when(moduleContext.get(DBFeature.class)).thenReturn(new DBFeature(db));
-        when(db.getContent()).thenReturn(content);
         when(moduleContext.get(SitePropertiesFeature.class)).thenReturn(new SitePropertiesFeature(siteProperties));
 		when(siteProperties.contextPath()).thenReturn("/");
 
         ContentNode node = new ContentNode("test/test2.md", "/test/test2", "test2.md", new HashMap<>());
 
-		when(content.searchByTitle("", VariantSearchMode.ORIGINAL)).thenReturn(List.of(node));
+		when(contentRepository.query()).thenReturn(query);
+		when(query.searchByTitle("")).thenReturn(query);
+		when(query.variants(VariantSearchMode.ORIGINAL)).thenReturn(query);
+		when(query.get()).thenReturn(List.of(node));
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("query", "");
 

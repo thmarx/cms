@@ -23,31 +23,28 @@ package com.condation.cms.modules.ui.extensionpoints.remotemethods;
 
 import com.condation.cms.api.Constants;
 import com.condation.cms.api.auth.Permissions;
-import com.condation.cms.api.db.DB;
 import com.condation.cms.api.db.CursorPage;
 import com.condation.cms.api.db.Page;
-import com.condation.cms.api.db.collection.CollectionCursorSupport;
 import com.condation.cms.api.db.collection.CollectionItem;
 import com.condation.cms.api.db.collection.CollectionItemId;
 import com.condation.cms.api.db.collection.CollectionItemMetadata;
 import com.condation.cms.api.eventbus.events.InvalidateContentCacheEvent;
 import com.condation.cms.api.feature.features.EventBusFeature;
 import com.condation.cms.api.feature.features.WorkflowFeature;
+import com.condation.cms.api.repository.CollectionAccess;
+import com.condation.cms.api.repository.CollectionRepository;
 import com.condation.cms.api.ui.annotations.RemoteMethod;
 import com.condation.cms.api.ui.extensions.UIRemoteMethodExtensionPoint;
 import com.condation.cms.api.ui.rpc.RPCException;
 import com.condation.cms.api.utils.MapUtil;
 import com.condation.cms.content.utils.SlugUtil;
 import com.condation.cms.content.template.functions.LinkFunction;
-import com.condation.cms.core.content.io.ContentFileParser;
 import com.condation.cms.core.content.io.YamlHeaderUpdater;
 import com.condation.cms.modules.ui.utils.FormHelper;
 import com.condation.cms.modules.ui.utils.MetaConverter;
 import com.condation.cms.modules.ui.utils.NumberUtils;
 import com.condation.modules.api.annotation.Extension;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Date;
 import java.util.HashMap;
@@ -85,9 +82,9 @@ public class RemoteCollectionEndpoints extends AbstractRemoteMethodeExtension {
 
 	@RemoteMethod(name = "collections.items", permissions = {Permissions.CONTENT_EDIT})
 	public Object items(Map<String, Object> parameters) throws RPCException {
-		var db = getDB(parameters);
+		var repository = getCollectionRepository(parameters);
 		var collectionName = requiredString(parameters, Parameters.COLLECTION);
-		ensureCollectionExists(db.getCollections().names(), collectionName);
+		ensureCollectionExists(repository.names(), collectionName);
 
 		long page = Math.max(1, NumberUtils.toLong(parameters.getOrDefault("page", 1L)));
 		long size = Math.clamp(
@@ -96,7 +93,7 @@ public class RemoteCollectionEndpoints extends AbstractRemoteMethodeExtension {
 				MAX_PAGE_SIZE);
 		var title = optionalString(parameters, "query");
 
-		var query = db.getCollections().collection(collectionName).metadataQuery();
+		var query = repository.metadataQuery(collectionName);
 		if (!title.isBlank()) {
 			query.searchByTitle(title);
 		}
@@ -112,27 +109,29 @@ public class RemoteCollectionEndpoints extends AbstractRemoteMethodeExtension {
 
 	@RemoteMethod(name = "collections.items.cursor", permissions = {Permissions.CONTENT_EDIT})
 	public Object cursorItems(Map<String, Object> parameters) throws RPCException {
-		var db = getDB(parameters);
+		var repository = getCollectionRepository(parameters);
 		var collectionName = requiredString(parameters, Parameters.COLLECTION);
-		ensureCollectionExists(db.getCollections().names(), collectionName);
+		ensureCollectionExists(repository.names(), collectionName);
 		long size = Math.clamp(
 				NumberUtils.toLong(parameters.getOrDefault("size", DEFAULT_PAGE_SIZE)),
 				1,
 				MAX_PAGE_SIZE);
-		if (!(db.getCollections() instanceof CollectionCursorSupport cursorSupport)) {
-			throw new RPCException(501, "collection storage does not support cursor paging");
-		}
 		var title = optionalString(parameters, "query");
-		CursorPage<CollectionItemMetadata> result = cursorSupport.metadataCursorPage(
-				collectionName,
-				optionalString(parameters, "cursor"),
-				size,
-				query -> {
-					if (!title.isBlank()) {
-						query.searchByTitle(title);
-					}
-					query.orderby(Constants.MetaFields.TITLE).asc();
-				});
+		CursorPage<CollectionItemMetadata> result;
+		try {
+			result = repository.metadataCursorPage(
+					collectionName,
+					optionalString(parameters, "cursor"),
+					size,
+					query -> {
+						if (!title.isBlank()) {
+							query.searchByTitle(title);
+						}
+						query.orderby(Constants.MetaFields.TITLE).asc();
+					});
+		} catch (UnsupportedOperationException exception) {
+			throw new RPCException(501, exception.getMessage());
+		}
 		return new CursorItemsDto(
 				result.items().stream().map(this::itemDto).toList(),
 				result.nextCursor());
@@ -152,22 +151,18 @@ public class RemoteCollectionEndpoints extends AbstractRemoteMethodeExtension {
 
 	@RemoteMethod(name = "collections.item.save", permissions = {Permissions.CONTENT_EDIT})
 	public synchronized Object save(Map<String, Object> parameters) throws RPCException {
-		var db = getDB(parameters);
+		var repository = getMutableCollectionRepository(parameters);
 		var item = item(parameters);
-		ensureLocalCollection(db, item.collection());
-		var sourceFile = db.getFileSystem().collectionsBase().resolve(item.path());
-		var writableFile = db.getFileSystem().resolve(Constants.Folders.COLLECTIONS).resolve(item.path());
+		ensureWritable(repository, item.collection());
 		try {
-			var parser = new ContentFileParser(sourceFile);
-			var meta = new HashMap<>(parser.getHeader());
+			var meta = new HashMap<>(item.meta());
 			var rawMeta = typedMeta(parameters.get("meta"));
 			YamlHeaderUpdater.mergeFlatMapIntoNestedMap(meta, MetaConverter.convertMeta(rawMeta));
-			normalizeAndValidateSlug(db, item.collection(), item.id(), meta);
+			normalizeAndValidateSlug(repository, item.collection(), item.id(), meta);
 			var content = parameters.containsKey(Parameters.CONTENT)
 					? FormHelper.getContent(parameters.get(Parameters.CONTENT))
-					: parser.getContent();
-			YamlHeaderUpdater.saveMarkdownFileWithHeader(writableFile, meta, content);
-			db.getCollections().refresh(item.collection(), item.id());
+					: item.content();
+			repository.save(item.collection(), item.id(), meta, content);
 			invalidateContentCache();
 			return Map.of("saved", true);
 		} catch (IOException | RuntimeException ex) {
@@ -178,13 +173,12 @@ public class RemoteCollectionEndpoints extends AbstractRemoteMethodeExtension {
 
 	@RemoteMethod(name = "collections.item.create", permissions = {Permissions.CONTENT_EDIT})
 	public synchronized Object create(Map<String, Object> parameters) throws RPCException {
-		var db = getDB(parameters);
+		var repository = getMutableCollectionRepository(parameters);
 		var collectionName = requiredString(parameters, Parameters.COLLECTION);
 		var id = requiredItemId(parameters);
-		ensureCollectionExists(db.getCollections().names(), collectionName);
-		ensureLocalCollection(db, collectionName);
-		var writableFile = writableFile(db, collectionName, id);
-		if (Files.exists(writableFile)) {
+		ensureCollectionExists(repository.names(), collectionName);
+		ensureWritable(repository, collectionName);
+		if (repository.get(collectionName, id).isPresent()) {
 			throw new RPCException(409, "collection item already exists");
 		}
 
@@ -192,7 +186,7 @@ public class RemoteCollectionEndpoints extends AbstractRemoteMethodeExtension {
 		YamlHeaderUpdater.mergeFlatMapIntoNestedMap(
 				meta,
 				MetaConverter.convertMeta(typedMeta(parameters.get("meta"))));
-		normalizeAndValidateSlug(db, collectionName, id, meta);
+		normalizeAndValidateSlug(repository, collectionName, id, meta);
 		meta.putIfAbsent(Constants.MetaFields.TITLE, id);
 		meta.put("createdAt", Date.from(Instant.now()));
 		meta.put("createdBy", getUserName());
@@ -202,16 +196,9 @@ public class RemoteCollectionEndpoints extends AbstractRemoteMethodeExtension {
 		var content = FormHelper.getContent(parameters.get(Parameters.CONTENT));
 
 		try {
-			Files.createDirectories(writableFile.getParent());
-			YamlHeaderUpdater.saveMarkdownFileWithHeader(writableFile, meta, content);
-			db.getCollections().refresh(collectionName, id);
+			var createdItem = repository.create(collectionName, id, meta, content);
 			invalidateContentCache();
-			return itemDto(new CollectionItem(
-					id,
-					collectionName,
-					collectionName + "/" + id + ".md",
-					content,
-					meta));
+			return itemDto(createdItem);
 		} catch (IOException | RuntimeException exception) {
 			log.error("could not create collection item {}/{}", collectionName, id, exception);
 			throw new RPCException(0, exception.getMessage());
@@ -220,19 +207,17 @@ public class RemoteCollectionEndpoints extends AbstractRemoteMethodeExtension {
 
 	@RemoteMethod(name = "collections.item.delete", permissions = {Permissions.CONTENT_EDIT})
 	public Object delete(Map<String, Object> parameters) throws RPCException {
-		var db = getDB(parameters);
+		var repository = getMutableCollectionRepository(parameters);
 		var collectionName = requiredString(parameters, Parameters.COLLECTION);
 		var id = requiredItemId(parameters);
-		ensureCollectionExists(db.getCollections().names(), collectionName);
-		ensureLocalCollection(db, collectionName);
-		var writableFile = writableFile(db, collectionName, id);
-		if (!Files.isRegularFile(writableFile)) {
+		ensureCollectionExists(repository.names(), collectionName);
+		ensureWritable(repository, collectionName);
+		if (repository.get(collectionName, id).isEmpty()) {
 			throw new RPCException(404, "collection item not found");
 		}
 
 		try {
-			Files.delete(writableFile);
-			db.getCollections().refresh(collectionName, id);
+			repository.delete(collectionName, id);
 			invalidateContentCache();
 			return Map.of("deleted", true);
 		} catch (IOException | RuntimeException exception) {
@@ -242,12 +227,12 @@ public class RemoteCollectionEndpoints extends AbstractRemoteMethodeExtension {
 	}
 
 	private CollectionItem item(Map<String, Object> parameters) throws RPCException {
-		var db = getDB(parameters);
+		var repository = getCollectionRepository(parameters);
 		var collectionName = requiredString(parameters, Parameters.COLLECTION);
 		var id = requiredItemId(parameters);
-		ensureCollectionExists(db.getCollections().names(), collectionName);
+		ensureCollectionExists(repository.names(), collectionName);
 		try {
-			return db.getCollections().collection(collectionName).item(id)
+			return repository.get(collectionName, id)
 					.orElseThrow(() -> new RPCException(404, "collection item not found"));
 		} catch (IllegalArgumentException ex) {
 			throw new RPCException(400, ex.getMessage());
@@ -289,26 +274,20 @@ public class RemoteCollectionEndpoints extends AbstractRemoteMethodeExtension {
 		getContext().get(EventBusFeature.class).eventBus().publish(new InvalidateContentCacheEvent());
 	}
 
-	private static Path writableFile(DB db, String collectionName, String id) {
-		return db.getFileSystem().resolve(Constants.Folders.COLLECTIONS)
-				.resolve(collectionName)
-				.resolve(id + ".md");
-	}
-
 	private static void ensureCollectionExists(java.util.Set<String> names, String name) throws RPCException {
 		if (!names.contains(name)) {
 			throw new RPCException(404, "collection not found: " + name);
 		}
 	}
 
-	private static void ensureLocalCollection(DB db, String name) throws RPCException {
-		if (!db.getCollections().isLocal(name)) {
+	private static void ensureWritable(CollectionRepository repository, String name) throws RPCException {
+		if (repository.access(name) != CollectionAccess.READ_WRITE) {
 			throw new RPCException(403, "referenced collection is read-only: " + name);
 		}
 	}
 
 	private static void normalizeAndValidateSlug(
-			DB db,
+			CollectionRepository repository,
 			String collectionName,
 			String itemId,
 			Map<String, Object> meta) throws RPCException {
@@ -325,7 +304,7 @@ public class RemoteCollectionEndpoints extends AbstractRemoteMethodeExtension {
 			throw new RPCException(400, "collection item slug must not be blank");
 		}
 
-		var duplicate = db.getCollections().collection(collectionName).metadataQuery()
+		var duplicate = repository.metadataQuery(collectionName)
 				.where("slug", slug)
 				.page(1, 2)
 				.getItems().stream()

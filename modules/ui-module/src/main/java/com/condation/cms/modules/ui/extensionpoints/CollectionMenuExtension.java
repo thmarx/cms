@@ -23,7 +23,8 @@ package com.condation.cms.modules.ui.extensionpoints;
 
 import com.condation.cms.api.auth.Permissions;
 import com.condation.cms.api.extensions.AbstractExtensionPoint;
-import com.condation.cms.api.feature.features.DBFeature;
+import com.condation.cms.api.feature.features.RepositoryFeature;
+import com.condation.cms.api.repository.CollectionAccess;
 import com.condation.cms.api.feature.features.HookSystemFeature;
 import com.condation.cms.api.ui.action.UIScriptAction;
 import com.condation.cms.api.ui.elements.Menu;
@@ -37,15 +38,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/** Adds one manager menu entry for every collection discovered on disk. */
+/** Adds one manager menu entry for every writable collection of the site. */
 @Extension(UIActionsExtensionPoint.class)
 public class CollectionMenuExtension extends AbstractExtensionPoint implements UIActionsExtensionPoint {
 
 	@Override
 	public void addMenuItems(Menu menu) {
-		var db = getContext().get(DBFeature.class).db();
-		var names = db.getCollections().names().stream()
-				.filter(db.getCollections()::isLocal)
+		var repository = getContext().get(RepositoryFeature.class).collectionRepository();
+		var names = repository.names().stream()
+				.filter(name -> repository.access(name) == CollectionAccess.READ_WRITE)
 				.sorted()
 				.toList();
 		if (names.isEmpty()) {

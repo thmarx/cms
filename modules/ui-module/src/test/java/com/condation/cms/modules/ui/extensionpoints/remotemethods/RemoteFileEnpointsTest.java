@@ -22,18 +22,13 @@ package com.condation.cms.modules.ui.extensionpoints.remotemethods;
  */
 
 import com.condation.cms.api.Constants;
-import com.condation.cms.api.db.Content;
 import com.condation.cms.api.db.ContentNode;
 import com.condation.cms.api.db.DB;
 import com.condation.cms.api.db.DBFileSystem;
-import com.condation.cms.api.db.cms.ReadOnlyFile;
-import com.condation.cms.api.eventbus.EventBus;
-import com.condation.cms.api.feature.features.DBFeature;
-import com.condation.cms.api.feature.features.EventBusFeature;
 import com.condation.cms.api.module.SiteModuleContext;
 import com.condation.cms.api.ui.rpc.RPCException;
-import com.condation.cms.core.content.io.ContentFileParser;
-import java.nio.file.Files;
+import com.condation.cms.api.repository.ContentDocument;
+import com.condation.cms.api.repository.MutableContentRepository;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -41,10 +36,13 @@ import java.util.Optional;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  *
@@ -65,9 +63,9 @@ public class RemoteFileEnpointsTest {
 	@Mock
 	private DBFileSystem dbFileSystem;
 
-	@TempDir
-	private Path tempDir;
-	
+	@Mock
+	private MutableContentRepository contentRepository;
+
 	public RemoteFileEnpointsTest() {
 	}
 
@@ -85,14 +83,11 @@ public class RemoteFileEnpointsTest {
 	}
 
 	@Test
-	public void create_folder_with_absolut_path_throws_error() throws RPCException {
+	public void create_folder_with_absolut_path_throws_error() throws Exception {
 		
-		Mockito.when(moduleContext.get(DBFeature.class)).thenReturn(new DBFeature(db));
-		Mockito.when(db.getFileSystem()).thenReturn(dbFileSystem);
-		Mockito.when(dbFileSystem.resolve(Constants.Folders.CONTENT)).thenReturn(Path.of("."));
-		
-		
-		RemoteFileEnpoints fileEndpoints = new RemoteFileEnpoints();
+		doThrow(new IllegalArgumentException("invalid content path"))
+				.when(contentRepository).createDirectory(Mockito.anyString());
+		RemoteFileEnpoints fileEndpoints = endpoints();
 		fileEndpoints.setContext(moduleContext);
 		
 		Assertions.assertThatThrownBy(() -> fileEndpoints.createFolder(Map.of(
@@ -104,28 +99,15 @@ public class RemoteFileEnpointsTest {
 
 	@Test
 	void listUsesContentTitleButKeepsTechnicalName() throws Exception {
-		var content = Mockito.mock(Content.class);
-		var contentBase = Mockito.mock(ReadOnlyFile.class);
-		var page = Mockito.mock(ReadOnlyFile.class);
 		var node = new ContentNode(
 				"about.md",
 				"/about",
 				"about.md",
 				Map.of(Constants.MetaFields.TITLE, "About us")
 		);
-		Mockito.when(moduleContext.get(DBFeature.class)).thenReturn(new DBFeature(db));
-		Mockito.when(db.getFileSystem()).thenReturn(dbFileSystem);
-		Mockito.when(db.getContent()).thenReturn(content);
-		Mockito.when(dbFileSystem.contentBase()).thenReturn(contentBase);
-		Mockito.when(contentBase.resolve("")).thenReturn(contentBase);
-		Mockito.when(contentBase.isDirectory()).thenReturn(true);
-		Mockito.when(contentBase.children()).thenReturn(List.of(page));
-		Mockito.when(page.getFileName()).thenReturn("about.md");
-		Mockito.when(page.uri()).thenReturn("/about");
-		Mockito.when(page.relativePath()).thenReturn("about.md");
-		Mockito.when(content.byPath("about.md")).thenReturn(Optional.of(node));
+		when(contentRepository.children("")).thenReturn(List.of(node));
 
-		var endpoints = new RemoteFileEnpoints();
+		var endpoints = endpoints();
 		endpoints.setContext(moduleContext);
 
 		@SuppressWarnings("unchecked")
@@ -145,21 +127,12 @@ public class RemoteFileEnpointsTest {
 
 	@Test
 	void renameMarkdownContentUpdatesTitleWithoutChangingFileName() throws Exception {
-		var contentBase = Mockito.mock(ReadOnlyFile.class);
-		var directory = Mockito.mock(ReadOnlyFile.class);
-		var contentFile = Mockito.mock(ReadOnlyFile.class);
-		var eventBus = Mockito.mock(EventBus.class);
-		var page = tempDir.resolve("about.md");
-		Files.writeString(page, "---\ntitle: Old title\ntemplate: page\n---\n\nBody");
-		Mockito.when(moduleContext.get(DBFeature.class)).thenReturn(new DBFeature(db));
-		Mockito.when(moduleContext.get(EventBusFeature.class)).thenReturn(new EventBusFeature(eventBus));
-		Mockito.when(db.getFileSystem()).thenReturn(dbFileSystem);
-		Mockito.when(dbFileSystem.contentBase()).thenReturn(contentBase);
-		Mockito.when(dbFileSystem.resolve(Constants.Folders.CONTENT)).thenReturn(tempDir);
-		Mockito.when(contentBase.resolve("")).thenReturn(directory);
-		Mockito.when(directory.resolve("about.md")).thenReturn(contentFile);
+		var node = new ContentNode("about.md", "/about", "about.md",
+				Map.of(Constants.MetaFields.TITLE, "Old title", Constants.MetaFields.TEMPLATE, "page"));
+		when(contentRepository.get("about.md")).thenReturn(Optional.of(node));
+		when(contentRepository.load(node)).thenReturn(Optional.of(new ContentDocument(node, "Body")));
 
-		var endpoints = new RemoteFileEnpoints();
+		var endpoints = endpoints();
 		endpoints.setContext(moduleContext);
 		endpoints.renameFile(Map.of(
 				"type", "content",
@@ -168,14 +141,28 @@ public class RemoteFileEnpointsTest {
 				"newName", "New title"
 		));
 
-		Assertions.assertThat(page).exists();
-		Assertions.assertThat(tempDir.resolve("New title")).doesNotExist();
-		var parser = new ContentFileParser(page.toString());
-		Assertions.assertThat(parser.getHeader())
-				.containsEntry(Constants.MetaFields.TITLE, "New title")
-				.containsEntry(Constants.MetaFields.TEMPLATE, "page");
-		Assertions.assertThat(parser.getContent()).isEqualTo("Body");
-		Mockito.verify(dbFileSystem).flushContentChanges();
+		verify(contentRepository).save(
+				Mockito.eq("about.md"),
+				Mockito.argThat(meta -> "New title".equals(meta.get(Constants.MetaFields.TITLE))
+						&& "page".equals(meta.get(Constants.MetaFields.TEMPLATE))),
+				Mockito.eq("Body"));
+	}
+
+	private RemoteFileEnpoints endpoints() {
+		var endpoints = new RemoteFileEnpoints() {
+			@Override
+			protected MutableContentRepository getMutableContentRepository(Map<String, Object> parameters) {
+				return contentRepository;
+			}
+
+			@Override
+			protected com.condation.cms.api.repository.ContentRepository getContentRepository(
+					Map<String, Object> parameters) {
+				return contentRepository;
+			}
+		};
+		endpoints.setContext(moduleContext);
+		return endpoints;
 	}
 	
 }

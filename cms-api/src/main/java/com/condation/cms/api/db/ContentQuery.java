@@ -25,6 +25,7 @@ package com.condation.cms.api.db;
 import com.condation.cms.api.Constants;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiPredicate;
 
 /**
  *
@@ -90,6 +91,18 @@ public interface ContentQuery<T> {
 			final String unit);
 	
 	ContentQuery<T> expression(final String expressions);
+
+	/**
+	 * Adds backend-specific comparison operators without exposing the concrete
+	 * query implementation to callers.
+	 */
+	default ContentQuery<T> customOperators(
+			Map<String, BiPredicate<Object, Object>> operators) {
+		if (!operators.isEmpty()) {
+			throw new UnsupportedOperationException("custom query operators are not supported");
+		}
+		return this;
+	}
 
 	/**
 	 * Restricts the query to items whose title matches the input.

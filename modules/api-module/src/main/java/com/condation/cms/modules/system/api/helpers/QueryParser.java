@@ -23,16 +23,16 @@ package com.condation.cms.modules.system.api.helpers;
 
 import com.condation.cms.api.db.ContentNode;
 import com.condation.cms.api.db.ContentQuery;
-import com.condation.cms.api.db.DB;
+import com.condation.cms.api.repository.ContentRepository;
 import static com.condation.cms.core.configuration.GSONProvider.GSON;
 import java.util.List;
 import java.util.Map;
 
 public class QueryParser {
 
-    public Object parse(DB db, String jsonBody) {
+	public Object parse(ContentRepository contentRepository, String jsonBody) {
         Map<String, Object> queryMap = GSON.fromJson(jsonBody, Map.class);
-        ContentQuery query = db.getContent().query((node, a) -> node);
+		ContentQuery query = contentRepository.query();
 
         if (queryMap.containsKey("contentType")) {
             query.contentType((String) queryMap.get("contentType"));

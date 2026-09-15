@@ -27,11 +27,13 @@ import com.condation.cms.api.db.ContentNode;
 import com.condation.cms.api.db.DB;
 import com.condation.cms.api.db.collection.Collection;
 import com.condation.cms.api.db.collection.CollectionItem;
-import com.condation.cms.api.db.collection.Collections;
 import com.condation.cms.api.feature.features.CurrentCollectionItemFeature;
 import com.condation.cms.api.feature.features.CurrentNodeFeature;
 import com.condation.cms.api.feature.features.DBFeature;
+import com.condation.cms.api.feature.features.RepositoryFeature;
 import com.condation.cms.api.request.RequestContext;
+import com.condation.cms.api.repository.ContentRepository;
+import com.condation.cms.api.repository.CollectionRepository;
 import com.condation.cms.api.ui.rpc.RPCError;
 import com.condation.cms.api.ui.rpc.RPCException;
 import com.condation.cms.api.ui.rpc.RPCResult;
@@ -94,8 +96,8 @@ class RemoteCallHandlerTest {
 	@Test
 	void contentUriHeaderAddsCurrentNodeFeature() throws Exception {
 		var context = new RequestContext();
-		var db = mock(DB.class);
-		var content = mock(Content.class);
+		var content = mock(ContentRepository.class);
+		var repositories = new RepositoryFeature(content, mock(CollectionRepository.class));
 		var request = mock(Request.class);
 		var headers = mock(HttpFields.class);
 		var node = new ContentNode(
@@ -104,13 +106,13 @@ class RemoteCallHandlerTest {
 				"about.md",
 				Map.of()
 		);
-		when(moduleContext.has(DBFeature.class)).thenReturn(true);
-		when(moduleContext.get(DBFeature.class)).thenReturn(new DBFeature(db));
-		when(db.getContent()).thenReturn(content);
+		when(moduleContext.has(RepositoryFeature.class)).thenReturn(true);
+		when(moduleContext.get(RepositoryFeature.class)).thenReturn(repositories);
 		when(request.getHeaders()).thenReturn(headers);
 		when(headers.get(RemoteCallHandler.COLLECTION_HEADER)).thenReturn(null);
 		when(headers.get(RemoteCallHandler.CONTENT_URI_HEADER)).thenReturn(node.uri());
-		when(content.byUri(node.uri())).thenReturn(Optional.of(node));
+		when(content.findByUrl(node.uri())).thenReturn(Optional.empty());
+		when(content.get(node.uri())).thenReturn(Optional.of(node));
 
 		var handler = new RemoteCallHandler(remoteMethodService, moduleContext, context);
 		var method = RemoteCallHandler.class.getDeclaredMethod("setCurrentContentNode", Request.class);
@@ -123,18 +125,17 @@ class RemoteCallHandlerTest {
 	@Test
 	void unknownContentUriHeaderDoesNotAddCurrentNodeFeature() throws Exception {
 		var context = new RequestContext();
-		var db = mock(DB.class);
-		var content = mock(Content.class);
+		var content = mock(ContentRepository.class);
+		var repositories = new RepositoryFeature(content, mock(CollectionRepository.class));
 		var request = mock(Request.class);
 		var headers = mock(HttpFields.class);
-		when(moduleContext.has(DBFeature.class)).thenReturn(true);
-		when(moduleContext.get(DBFeature.class)).thenReturn(new DBFeature(db));
-		when(db.getContent()).thenReturn(content);
+		when(moduleContext.has(RepositoryFeature.class)).thenReturn(true);
+		when(moduleContext.get(RepositoryFeature.class)).thenReturn(repositories);
 		when(request.getHeaders()).thenReturn(headers);
 		when(headers.get(RemoteCallHandler.COLLECTION_HEADER)).thenReturn(null);
 		when(headers.get(RemoteCallHandler.CONTENT_URI_HEADER)).thenReturn("unknown.md");
-		when(content.byUri("unknown.md")).thenReturn(Optional.empty());
-		when(content.byPath("unknown.md")).thenReturn(Optional.empty());
+		when(content.findByUrl("unknown.md")).thenReturn(Optional.empty());
+		when(content.get("unknown.md")).thenReturn(Optional.empty());
 
 		var handler = new RemoteCallHandler(remoteMethodService, moduleContext, context);
 		var method = RemoteCallHandler.class.getDeclaredMethod("setCurrentContentNode", Request.class);
@@ -147,9 +148,8 @@ class RemoteCallHandlerTest {
 	@Test
 	void collectionHeadersAddCurrentCollectionItemAndNodeFeatures() throws Exception {
 		var context = new RequestContext();
-		var db = mock(DB.class);
-		var collections = mock(Collections.class);
-		var collection = mock(Collection.class);
+		var collections = mock(CollectionRepository.class);
+		var repositories = new RepositoryFeature(mock(ContentRepository.class), collections);
 		var request = mock(Request.class);
 		var headers = mock(HttpFields.class);
 		var item = new CollectionItem(
@@ -158,11 +158,9 @@ class RemoteCallHandlerTest {
 				"blog/first.md",
 				"Body",
 				Map.of("title", "First"));
-		when(moduleContext.has(DBFeature.class)).thenReturn(true);
-		when(moduleContext.get(DBFeature.class)).thenReturn(new DBFeature(db));
-		when(db.getCollections()).thenReturn(collections);
-		when(collections.collection("blog")).thenReturn(collection);
-		when(collection.item("first")).thenReturn(Optional.of(item));
+		when(moduleContext.has(RepositoryFeature.class)).thenReturn(true);
+		when(moduleContext.get(RepositoryFeature.class)).thenReturn(repositories);
+		when(collections.get("blog", "first")).thenReturn(Optional.of(item));
 		when(request.getHeaders()).thenReturn(headers);
 		when(headers.get(RemoteCallHandler.COLLECTION_HEADER)).thenReturn("blog");
 		when(headers.get(RemoteCallHandler.COLLECTION_ITEM_HEADER)).thenReturn("first");

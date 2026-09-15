@@ -22,18 +22,14 @@ package com.condation.cms.content.template.functions.navigation;
  */
 import com.condation.cms.api.Constants;
 import com.condation.cms.api.db.ContentNode;
-import com.condation.cms.api.db.DB;
-import com.condation.cms.api.db.cms.ReadOnlyFile;
 import com.condation.cms.api.feature.features.ContentNodeMapperFeature;
-import com.condation.cms.api.feature.features.ContentParserFeature;
 import com.condation.cms.api.feature.features.HookSystemFeature;
-import com.condation.cms.api.feature.features.MarkdownRendererFeature;
 import com.condation.cms.api.hooks.HookSystem;
 import com.condation.cms.api.hooks.Hooks;
 import com.condation.cms.api.model.NavNode;
 import com.condation.cms.api.request.RequestContext;
+import com.condation.cms.api.repository.ContentRepository;
 import com.condation.cms.api.utils.NodeUtil;
-import com.condation.cms.api.utils.PathUtil;
 import com.condation.cms.api.utils.HTTPUtil;
 import com.condation.cms.content.template.functions.AbstractCurrentNodeFunction;
 import java.util.ArrayList;
@@ -50,6 +46,8 @@ import lombok.extern.slf4j.Slf4j;
 public class NavigationFunction extends AbstractCurrentNodeFunction {
 
 	private static final int DEFAULT_DEPTH = 1;
+	private static final String INDEX_MD = "index.md";
+	private static final String SLASH_INDEX_MD = "/" + INDEX_MD;
 
 	private String contentType = Constants.DEFAULT_CONTENT_TYPE;
 
@@ -57,13 +55,11 @@ public class NavigationFunction extends AbstractCurrentNodeFunction {
 
 	private final HookSystem hookSystem;
 
-	public NavigationFunction(DB db, ReadOnlyFile currentNode, RequestContext context) {
+	public NavigationFunction(ContentRepository contentRepository,
+			ContentNode currentNode, RequestContext context) {
 		super(
-				db,
 				currentNode,
-				context.get(ContentParserFeature.class).contentParser(),
-				context.get(MarkdownRendererFeature.class).markdownRenderer(),
-				context.get(ContentNodeMapperFeature.class).contentNodeMapper(),
+				contentRepository,
 				context);
 		hookSystem = context.get(HookSystemFeature.class).hookSystem();
 	}
@@ -80,26 +76,15 @@ public class NavigationFunction extends AbstractCurrentNodeFunction {
 	 */
 	public List<NavNode> path() {
 		List<NavNode> navNodes = new ArrayList<>();
-		var contentBase = db.getFileSystem().contentBase();
 		var node = currentNode;
 		while (node != null) {
-			var uri = PathUtil.toRelativeFile(node, contentBase);
-			final Optional<ContentNode> contentNode = db.getContent().byPath(uri);
-			if (contentNode.isPresent()) {
-				var metaNode = contentNode.get();
-				var nodeName = NodeUtil.getName(metaNode);
-
-				var path = contentBase.resolve(metaNode.uri());
-				final NavNode navNode = new NavNode(nodeName, HTTPUtil.modifyUrl(metaNode.url(), context), isCurrentNode(path));
-				if (!navNodes.contains(navNode)) {
-					navNodes.add(navNode);
-				}
+			var nodeName = NodeUtil.getName(node);
+			final NavNode navNode = new NavNode(nodeName,
+					HTTPUtil.modifyUrl(node.url(), context), isCurrentNode(node));
+			if (!navNodes.contains(navNode)) {
+				navNodes.add(navNode);
 			}
-			if (node.hasParent()) {
-				node = node.getParent();
-			} else {
-				node = null;
-			}
+			node = parentNode(node).orElse(null);
 		}
 
 		navNodes = navNodes.reversed();
@@ -137,19 +122,11 @@ public class NavigationFunction extends AbstractCurrentNodeFunction {
 	private List<NavNode> getNodes(final String start, final int depth) {
 		List<NavNode> navNodes = Collections.emptyList();
 		if (start.startsWith("/")) { // root
-			navNodes = getNodesFromBase(db.getFileSystem().contentBase(), start.substring(1), depth);
+			navNodes = getNodesFromBase("", start.substring(1), depth);
 		} else if (start.equals(".")) { // current
-			if (currentNode.equals(db.getFileSystem().contentBase())) {
-				navNodes = getNodesFromBase(currentNode, "", depth);
-			} else {
-				navNodes = getNodesFromBase(currentNode.getParent(), "", depth);
-			}
+			navNodes = getNodesFromBase(currentDirectory(), "", depth);
 		} else if (start.startsWith("./")) { // subfolder of current
-			if (currentNode.equals(db.getFileSystem().contentBase())) {
-				navNodes = getNodesFromBase(currentNode, start.substring(2), depth);
-			} else {
-				navNodes = getNodesFromBase(currentNode.getParent(), start.substring(2), depth);
-			}
+			navNodes = getNodesFromBase(currentDirectory(), start.substring(2), depth);
 			
 		}
 		if (name != null) {
@@ -158,19 +135,19 @@ public class NavigationFunction extends AbstractCurrentNodeFunction {
 		return navNodes;
 	}
 
-	private List<NavNode> getSubNodesFromBaseRemoveCurrent(final ReadOnlyFile base, final String start, final int depth, final String toRemovePath) {
+	private List<NavNode> getSubNodesFromBaseRemoveCurrent(final String base, final String start, final int depth, final String toRemovePath) {
 		List<NavNode> nodes = getNodesFromBase(base, start, depth);
 
 		return nodes.stream().filter(node -> !node.path().equals(toRemovePath)).toList();
 	}
 
-	private List<NavNode> getNodesFromBase(final ReadOnlyFile base, final String start, final int depth) {
+	private List<NavNode> getNodesFromBase(final String base, final String start, final int depth) {
 		if (depth == 0) {
 			return Collections.emptyList();
 		}
 		try {
 			final List<ContentNode> navNodes = new ArrayList(
-					db.getContent().listContent(base, start)
+					contentRepository.children(repositoryPath(base, start))
 							.stream()
 							.filter(NodeUtil::getMenuVisibility)
 							.filter(NodeUtil.contentTypeFiler(contentType))
@@ -194,16 +171,14 @@ public class NavigationFunction extends AbstractCurrentNodeFunction {
 			});
 
 			final List<NavNode> nodes = new ArrayList<>();
-			final ReadOnlyFile contentBase = db.getFileSystem().contentBase();
 			navNodes.forEach((node) -> {
 				var name = NodeUtil.getName(node);
-				var path = contentBase.resolve(node.uri());
 				var node_url = HTTPUtil.modifyUrl(node.url(), context);
 				final NavNode navNode = new NavNode(
 						name,
 						node_url,
-						isCurrentNode(path),
-						getSubNodesFromBaseRemoveCurrent(path.getParent(), "./", (depth - 1), node_url)
+						isCurrentNode(node),
+						getSubNodesFromBaseRemoveCurrent(childBase(node), "./", (depth - 1), node_url)
 				);
 				nodes.add(navNode);
 			});
@@ -214,13 +189,37 @@ public class NavigationFunction extends AbstractCurrentNodeFunction {
 		return Collections.emptyList();
 	}
 
-	private boolean isCurrentNode(final ReadOnlyFile node) {
-		ReadOnlyFile nodeIndex;
-		if ("index.md".equals(node.getFileName())) {
-			nodeIndex = node;
-		} else {
-			nodeIndex = node.resolve("index.md");
+	private boolean isCurrentNode(final ContentNode node) {
+		return currentNode != null && (node.equals(currentNode)
+				|| normalize(node.url()).equals(normalize(currentNode.url())));
+	}
+
+	private String childBase(ContentNode node) {
+		var path = normalize(node.path());
+		return path.endsWith(INDEX_MD)
+				? path.substring(0, path.length() - INDEX_MD.length())
+				: path;
+	}
+
+	private Optional<ContentNode> parentNode(ContentNode node) {
+		var path = normalize(node.path());
+		var directory = node.isDirectory() ? path : parentPath(path);
+		if (path.endsWith(SLASH_INDEX_MD)) {
+			directory = parentPath(path.substring(0, path.length() - SLASH_INDEX_MD.length()));
+		} else if (INDEX_MD.equals(path)) {
+			return Optional.empty();
 		}
-		return node.equals(currentNode) || currentNode.equals(nodeIndex);
+		if (directory.isEmpty()) {
+			return contentRepository.get(INDEX_MD).filter(parent -> !parent.equals(node));
+		}
+		var parentDirectory = directory;
+		return contentRepository.get(parentDirectory + SLASH_INDEX_MD)
+				.or(() -> contentRepository.get(parentDirectory))
+				.filter(parent -> !parent.equals(node));
+	}
+
+	private static String parentPath(String path) {
+		var separator = path.lastIndexOf('/');
+		return separator < 0 ? "" : path.substring(0, separator);
 	}
 }

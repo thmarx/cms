@@ -21,7 +21,6 @@ package com.condation.cms.api.template;
  * #L%
  */
 import com.condation.cms.api.db.ContentNode;
-import com.condation.cms.api.db.cms.ReadOnlyFile;
 import com.condation.cms.api.request.RequestContext;
 import com.condation.cms.api.theme.Theme;
 import java.io.IOException;
@@ -49,12 +48,11 @@ public interface TemplateEngine {
 	public static class Model {
 
 		public final Map<String, Object> values = new HashMap<>();
-		public final ReadOnlyFile contentFile;
 		public final ContentNode contentNode;
 		public final RequestContext requestContext;
 
 		public Model copy() {
-			var copy = new Model(this.contentFile, this.contentNode, this.requestContext);
+			var copy = new Model(this.contentNode, this.requestContext);
 			
 			copy.values.putAll(this.values);
 			

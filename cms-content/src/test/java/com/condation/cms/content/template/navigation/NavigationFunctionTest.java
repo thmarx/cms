@@ -24,16 +24,20 @@ package com.condation.cms.content.template.navigation;
 
 import com.condation.cms.content.template.functions.navigation.NavigationFunction;
 import com.condation.cms.api.content.ContentParser;
+import com.condation.cms.api.SiteProperties;
 import com.condation.cms.api.db.Content;
+import com.condation.cms.api.db.ContentNode;
 import com.condation.cms.api.db.DB;
 import com.condation.cms.api.db.DBFileSystem;
 import com.condation.cms.api.feature.features.ContentNodeMapperFeature;
 import com.condation.cms.api.feature.features.ContentParserFeature;
 import com.condation.cms.api.feature.features.HookSystemFeature;
 import com.condation.cms.api.feature.features.MarkdownRendererFeature;
+import com.condation.cms.api.feature.features.SitePropertiesFeature;
 import com.condation.cms.api.hooks.FilterContext;
 import com.condation.cms.api.hooks.HookSystem;
 import com.condation.cms.api.mapper.ContentNodeMapper;
+import com.condation.cms.api.repository.ContentRepository;
 import com.condation.cms.api.markdown.MarkdownRenderer;
 import com.condation.cms.api.model.NavNode;
 import com.condation.cms.api.request.RequestContext;
@@ -41,6 +45,7 @@ import com.condation.cms.filesystem.NIOReadOnlyFile;
 import com.condation.cms.hooksystem.CMSHookSystem;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.assertj.core.api.Assertions;
@@ -50,6 +55,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import static org.mockito.Mockito.mock;
 
 /**
  *
@@ -73,6 +80,8 @@ public class NavigationFunctionTest {
 	MarkdownRenderer markdownRenderer;
 	@Mock
 	ContentNodeMapper contentNodeMapper;
+	@Mock
+	ContentRepository contentRepository;
 	
 	NavigationFunction sut;
 	
@@ -95,10 +104,13 @@ public class NavigationFunctionTest {
 		requestContext.add(ContentParserFeature.class, new ContentParserFeature(contentParser));
 		requestContext.add(MarkdownRendererFeature.class, new MarkdownRendererFeature(markdownRenderer));
 		requestContext.add(ContentNodeMapperFeature.class, new ContentNodeMapperFeature(contentNodeMapper));
+		var siteProperties = mock(SiteProperties.class);
+		Mockito.lenient().when(siteProperties.contextPath()).thenReturn("/");
+		requestContext.add(SitePropertiesFeature.class, new SitePropertiesFeature(siteProperties));
 		
-		sut = new NavigationFunction(db, 
-				new NIOReadOnlyFile(Path.of("content/current/"), Path.of("content/"))
-				, requestContext);
+		sut = new NavigationFunction(contentRepository,
+				new ContentNode("current/index.md", "/current", "index.md", Map.of()),
+				requestContext);
 	}
 	
 	@Test
@@ -118,7 +130,8 @@ public class NavigationFunctionTest {
 		
 		Assertions.assertThat(hookCalled).isTrue();
 		Assertions.assertThat(nodes).containsExactly(
-				new NavNode("test", "test", false)
+				new NavNode("test", "test", false),
+				new NavNode("index.md", "/current", true)
 		);
 	}
 	

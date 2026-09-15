@@ -41,7 +41,7 @@ public @interface FeatureScope {
 	
 	public enum Scope {
 		REQUEST,
-		GLOBAL,
+		SITE,
 		MODULE,
 		SERVER
 	}

@@ -22,13 +22,8 @@ package com.condation.cms.core.serivce.impl;
  */
 
 import com.condation.cms.api.Constants;
-import com.condation.cms.api.db.DB;
-import com.condation.cms.api.eventbus.EventBus;
-import com.condation.cms.api.eventbus.events.ReIndexContentMetaDataEvent;
+import com.condation.cms.api.repository.MutableContentRepository;
 import com.condation.cms.api.utils.PathUtil;
-import com.condation.cms.core.content.ContentResolvingStrategy;
-import com.condation.cms.core.content.io.ContentFileParser;
-import com.condation.cms.core.content.io.YamlHeaderUpdater;
 import com.condation.cms.core.serivce.Service;
 import java.io.IOException;
 import java.util.HashMap;
@@ -42,34 +37,26 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class NodeTranslationService implements Service {
 	
-	private final DB db;
-	private final EventBus eventBus;
+	private final MutableContentRepository contentRepository;
 	
-	public NodeTranslationService (final DB db, final EventBus eventBus) {
-		this.db = db;
-		this.eventBus = eventBus;
+	public NodeTranslationService (final MutableContentRepository contentRepository) {
+		this.contentRepository = contentRepository;
 	}
 	
 	public boolean removeTranslation (String uri, String language) {
-		var contentFile = ContentResolvingStrategy.resolve(uri, db).orElse(null);
-		
-		if (contentFile != null) {
+		var node = contentRepository.findByUrl(uri).or(() -> contentRepository.get(uri));
+		if (node.isPresent()) {
 			try {
-				ContentFileParser parser = new ContentFileParser(contentFile);
-
-				Map<String, Object> meta = parser.getHeader();
+				var document = contentRepository.load(node.get()).orElseThrow();
+				Map<String, Object> meta = new HashMap<>(node.get().data());
 				var translations = (Map<String, Object>)meta.getOrDefault("translations", new HashMap<>());
 				translations.remove(language);
 				meta.put("translations", translations);
 				
-				var path = contentFile.relativePath();
-				var filePath = db.getFileSystem().resolve(Constants.Folders.CONTENT).resolve(path);
-
-				YamlHeaderUpdater.saveMarkdownFileWithHeader(filePath, meta, parser.getContent());
+				var path = node.get().path();
+				contentRepository.save(path, meta, document.content());
 				log.debug("file {} saved", path);
 
-				eventBus.publish(new ReIndexContentMetaDataEvent(path));
-				
 				return true;
 			} catch (IOException ex) {
 				log.error("", ex);
@@ -82,26 +69,19 @@ public class NodeTranslationService implements Service {
 	
 	public boolean addTranslation (String uri, String site, String translationUri, String language) {
 
-		var contentFile = ContentResolvingStrategy.resolve(uri, db).orElse(null);
-		
-		if (contentFile != null) {
+		var node = contentRepository.findByUrl(uri).or(() -> contentRepository.get(uri));
+		if (node.isPresent()) {
 			try {
-				ContentFileParser parser = new ContentFileParser(contentFile);
-
-				Map<String, Object> meta = parser.getHeader();
+				var document = contentRepository.load(node.get()).orElseThrow();
+				Map<String, Object> meta = new HashMap<>(node.get().data());
 				var translations = (Map<String, Object>)meta.getOrDefault("translations", new HashMap<>());
 				translations.put(language, PathUtil.toURL(translationUri));
 				meta.put("translations", translations);
 				
-				var path = contentFile.relativePath();
-				
-				var filePath = db.getFileSystem().resolve(Constants.Folders.CONTENT).resolve(path);
-
-				YamlHeaderUpdater.saveMarkdownFileWithHeader(filePath, meta, parser.getContent());
+				var path = node.get().path();
+				contentRepository.save(path, meta, document.content());
 				log.debug("file {} saved", path);
 
-				eventBus.publish(new ReIndexContentMetaDataEvent(path));
-				
 				return true;
 			} catch (IOException ex) {
 				log.error("", ex);

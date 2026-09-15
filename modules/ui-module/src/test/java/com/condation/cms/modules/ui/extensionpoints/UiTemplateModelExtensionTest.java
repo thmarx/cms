@@ -26,9 +26,11 @@ import static org.mockito.Mockito.when;
 
 import com.condation.cms.api.db.DB;
 import com.condation.cms.api.db.collection.CollectionItem;
-import com.condation.cms.api.db.collection.Collections;
 import com.condation.cms.api.feature.features.DBFeature;
 import com.condation.cms.api.feature.features.IsPreviewFeature;
+import com.condation.cms.api.feature.features.RepositoryFeature;
+import com.condation.cms.api.repository.CollectionAccess;
+import com.condation.cms.api.repository.CollectionRepository;
 import com.condation.cms.api.module.SiteModuleContext;
 import com.condation.cms.api.request.RequestContext;
 import java.util.Map;
@@ -39,12 +41,11 @@ class UiTemplateModelExtensionTest {
 
 	@Test
 	void doesNotRenderCollectionToolbarForReferencedCollection() {
-		var db = mock(DB.class);
-		var collections = mock(Collections.class);
-		when(db.getCollections()).thenReturn(collections);
-		when(collections.isLocal("authors")).thenReturn(false);
+		var collections = mock(CollectionRepository.class);
+		when(collections.access("authors")).thenReturn(CollectionAccess.READ_ONLY);
 		var siteContext = mock(SiteModuleContext.class);
-		when(siteContext.get(DBFeature.class)).thenReturn(new DBFeature(db));
+		when(siteContext.get(RepositoryFeature.class)).thenReturn(new RepositoryFeature(
+				mock(com.condation.cms.api.repository.ContentRepository.class), collections));
 		var requestContext = new RequestContext();
 		requestContext.add(IsPreviewFeature.class, new IsPreviewFeature());
 		var helper = new UiTemplateModelExtension.UIHelper(requestContext, siteContext);

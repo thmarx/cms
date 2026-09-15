@@ -34,6 +34,8 @@ import com.condation.cms.api.feature.features.DBFeature;
 import com.condation.cms.api.feature.features.EventBusFeature;
 import com.condation.cms.api.feature.features.InjectorFeature;
 import com.condation.cms.api.feature.features.MessagingFeature;
+import com.condation.cms.api.feature.features.MutableRepositoryFeature;
+import com.condation.cms.api.feature.features.RepositoryFeature;
 import com.condation.cms.api.feature.features.ServerPropertiesFeature;
 import com.condation.cms.api.feature.features.SitePropertiesFeature;
 import com.condation.cms.api.feature.features.ThemeFeature;
@@ -41,6 +43,10 @@ import com.condation.cms.api.feature.features.WorkflowFeature;
 import com.condation.cms.api.workflow.WFStatusProvider;
 import com.condation.cms.api.messaging.Messaging;
 import com.condation.cms.api.module.SiteModuleContext;
+import com.condation.cms.api.repository.CollectionRepository;
+import com.condation.cms.api.repository.ContentRepository;
+import com.condation.cms.api.repository.MutableCollectionRepository;
+import com.condation.cms.api.repository.MutableContentRepository;
 import com.condation.cms.api.scheduler.CronJobContext;
 import com.condation.cms.api.theme.Theme;
 import com.condation.cms.api.workflow.Workflow;
@@ -78,6 +84,12 @@ public class SiteConfigInitializer {
 		context.add(ThemeFeature.class, new ThemeFeature(injector.getInstance(Theme.class)));
 		context.add(ConfigurationFeature.class, new ConfigurationFeature(injector.getInstance(Configuration.class)));
 		context.add(WorkflowFeature.class, new WorkflowFeature(injector.getInstance(Workflow.class)));
+		context.add(RepositoryFeature.class, new RepositoryFeature(
+				injector.getInstance(ContentRepository.class),
+				injector.getInstance(CollectionRepository.class)));
+		context.add(MutableRepositoryFeature.class, new MutableRepositoryFeature(
+				injector.getInstance(MutableContentRepository.class),
+				injector.getInstance(MutableCollectionRepository.class)));
     }
 
     private void initModuleContext () {
@@ -91,6 +103,12 @@ public class SiteConfigInitializer {
 		cmsModuleContext.add(ThemeFeature.class, new ThemeFeature(injector.getInstance(Theme.class)));
 		cmsModuleContext.add(ConfigurationFeature.class, new ConfigurationFeature(injector.getInstance(Configuration.class)));
 		cmsModuleContext.add(WorkflowFeature.class, new WorkflowFeature(injector.getInstance(Workflow.class)));
+		cmsModuleContext.add(RepositoryFeature.class, new RepositoryFeature(
+				injector.getInstance(ContentRepository.class),
+				injector.getInstance(CollectionRepository.class)));
+		cmsModuleContext.add(MutableRepositoryFeature.class, new MutableRepositoryFeature(
+				injector.getInstance(MutableContentRepository.class),
+				injector.getInstance(MutableCollectionRepository.class)));
 		cmsModuleContext.add(CronJobSchedulerFeature.class, new CronJobSchedulerFeature(injector.getInstance(SiteCronJobScheduler.class)));
 		cmsModuleContext.add(CacheManagerFeature.class, new CacheManagerFeature(injector.getInstance(CacheManager.class)));
 		cmsModuleContext.add(InjectorFeature.class, new InjectorFeature(injector));

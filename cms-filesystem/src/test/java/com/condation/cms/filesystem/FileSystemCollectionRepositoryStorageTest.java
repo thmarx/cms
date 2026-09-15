@@ -23,7 +23,6 @@ package com.condation.cms.filesystem;
 
 import com.condation.cms.api.db.ContentNode;
 import com.condation.cms.api.db.ContentQuery;
-import com.condation.cms.api.db.collection.CollectionCursorSupport;
 import com.condation.cms.api.feature.features.IsPreviewFeature;
 import com.condation.cms.api.feature.features.WorkflowFeature;
 import com.condation.cms.api.request.RequestContext;
@@ -41,7 +40,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.yaml.snakeyaml.Yaml;
 
-class FileCollectionsTest {
+class FileSystemCollectionRepositoryStorageTest {
 
 	@TempDir
 	Path tempDirectory;
@@ -163,12 +162,12 @@ class FileCollectionsTest {
 			return parseMeta(path);
 		};
 
-		var first = new FileCollections("test-site", tempDirectory, parser);
+		var first = new FileSystemCollectionRepository("test-site", tempDirectory, parser);
 		first.init();
 		first.close();
 		Assertions.assertThat(parseCount).hasValue(2);
 
-		var second = new FileCollections("test-site", tempDirectory, parser);
+		var second = new FileSystemCollectionRepository("test-site", tempDirectory, parser);
 		try {
 			second.init();
 			Assertions.assertThat(parseCount).hasValue(2);
@@ -184,7 +183,7 @@ class FileCollectionsTest {
 		write("blog/first.md", "title: First", "First");
 		write("blog/second.md", "title: Second", "Second");
 		var parseCount = new AtomicInteger();
-		var collections = new FileCollections("test-site", tempDirectory, path -> {
+		var collections = new FileSystemCollectionRepository("test-site", tempDirectory, path -> {
 			parseCount.incrementAndGet();
 			return parseMeta(path);
 		});
@@ -209,10 +208,9 @@ class FileCollectionsTest {
 		write("blog/third.md", "title: C", "Third");
 		var collections = createCollections();
 		try {
-			var cursorSupport = (CollectionCursorSupport) collections;
-			var firstPage = cursorSupport.metadataCursorPage(
+			var firstPage = collections.metadataCursorPage(
 					"blog", null, 2, query -> query.orderby("title").asc());
-			var secondPage = cursorSupport.metadataCursorPage(
+			var secondPage = collections.metadataCursorPage(
 					"blog", firstPage.nextCursor(), 2, query -> query.orderby("title").asc());
 
 			Assertions.assertThat(firstPage.items()).extracting(item -> item.id())
@@ -225,7 +223,7 @@ class FileCollectionsTest {
 			write("blog/third.md", "title: D", "Changed");
 			collections.refresh("blog", "third");
 			Assertions.assertThatIllegalArgumentException().isThrownBy(() ->
-					cursorSupport.metadataCursorPage(
+					collections.metadataCursorPage(
 							"blog",
 							firstPage.nextCursor(),
 							2,
@@ -433,8 +431,9 @@ class FileCollectionsTest {
 		}
 	}
 
-	private FileCollections createCollections() throws Exception {
-		var collections = new FileCollections("test-site", tempDirectory, FileCollectionsTest::parseMeta);
+	private FileSystemCollectionRepository createCollections() throws Exception {
+		var collections = new FileSystemCollectionRepository(
+				"test-site", tempDirectory, FileSystemCollectionRepositoryStorageTest::parseMeta);
 		collections.init();
 		return collections;
 	}

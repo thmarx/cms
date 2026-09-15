@@ -30,13 +30,17 @@ import com.condation.cms.api.configuration.Configuration;
 import com.condation.cms.api.configuration.configs.SiteConfiguration;
 import com.condation.cms.api.content.ContentParser;
 import com.condation.cms.api.db.Page;
+import com.condation.cms.api.db.ContentNode;
 import com.condation.cms.api.db.cms.ReadOnlyFile;
 import com.condation.cms.api.mapper.ContentNodeMapper;
 import com.condation.cms.api.markdown.MarkdownRenderer;
 import com.condation.cms.api.request.RequestContext;
+import com.condation.cms.api.repository.ContentRepository;
 import com.condation.cms.content.DefaultContentParser;
 import com.condation.cms.core.eventbus.DefaultEventBus;
 import com.condation.cms.filesystem.FileDB;
+import com.condation.cms.filesystem.FileSystemContentRepository;
+import com.condation.cms.filesystem.FileSystemContentStore;
 import com.condation.cms.filesystem.NIOReadOnlyFile;
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -61,13 +65,14 @@ import org.mockito.Mockito;
 public class ViewParserTest {
 	
 	static FileDB db;
+	static ContentRepository contentRepository;
 	static ContentParser parser = new DefaultContentParser();
 	static MarkdownRenderer markdownRenderer = TestHelper.getRenderer();
 	static RequestContext requestContext;
 	
 	@BeforeEach
 	void setup_test () throws IOException {
-		requestContext = TestHelper.requestContext("", parser, markdownRenderer, new ContentNodeMapper(db, parser));
+		requestContext = TestHelper.requestContext("", parser, markdownRenderer, new ContentNodeMapper(contentRepository));
 	}
 	
 	@BeforeAll
@@ -92,6 +97,9 @@ public class ViewParserTest {
 			}
 		}, config);
 		db.init();
+		contentRepository = new FileSystemContentRepository(
+				db.getContent(), db.getFileSystem(),
+				new FileSystemContentStore(db.getFileSystem()), parser);
 	}
 	@AfterAll
 	static void close () throws Exception {
@@ -101,7 +109,7 @@ public class ViewParserTest {
 	@Test
 	public void test_query () throws Exception {
 		final ReadOnlyFile currentNode = db.getReadOnlyFileSystem().resolve("content/query/view.yaml");		
-		var view = ViewParser.parse(currentNode);		
+		var view = ViewParser.parse(currentNode.getContent());
 		Assertions.assertThat(view).isNotNull();
 	
 		
@@ -117,7 +125,10 @@ public class ViewParserTest {
 				
 				long before = System.currentTimeMillis();
 				
-				var page = view.getNodes(db, currentNode, parser, markdownRenderer, context, queryParams, requestContext);
+				var page = view.getNodes(
+						contentRepository,
+						new ContentNode("query/view.yaml", "/query/view", "view.yaml", Map.of()),
+						context, queryParams, requestContext);
 				
 				System.out.println("took %d ms".formatted((System.currentTimeMillis() - before)));
 				
@@ -133,7 +144,7 @@ public class ViewParserTest {
 	@Test
 	public void test_nodelist () throws Exception {
 		final ReadOnlyFile currentNode = db.getReadOnlyFileSystem().resolve("content/view/view.yaml");		
-		var view = ViewParser.parse(currentNode);		
+		var view = ViewParser.parse(currentNode.getContent());
 		Assertions.assertThat(view).isNotNull();
 	
 		
@@ -146,7 +157,10 @@ public class ViewParserTest {
 					.allowHostAccess(HostAccess.ALL)
 					.engine(engine).build()) {
 				Map<String, List<String>> queryParams = new HashMap<>(Map.of("page", List.of("1")));
-				var page = view.getNodes(db, currentNode, parser, markdownRenderer, context, queryParams, requestContext);
+				var page = view.getNodes(
+						contentRepository,
+						new ContentNode("view/view.yaml", "/view/view", "view.yaml", Map.of()),
+						context, queryParams, requestContext);
 				
 				Assertions.assertThat(page)
 						.isNotNull()
@@ -161,7 +175,7 @@ public class ViewParserTest {
 	public void test() throws IOException, URISyntaxException {
 		var view = ViewParser.parse(new NIOReadOnlyFile(
 				Path.of(ViewParser.class.getResource("view-nodelist.yaml").toURI()), 
-				Path.of("./")));
+				Path.of("./")).getContent());
 		Assertions.assertThat(view.getTemplate()).isEqualTo("views/test.html");
 
 		Assertions.assertThat(view.getContent().getNodelist().getFrom()).isEqualTo("./");

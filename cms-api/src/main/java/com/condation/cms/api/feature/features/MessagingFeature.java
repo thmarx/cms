@@ -29,6 +29,6 @@ import com.condation.cms.api.messaging.Messaging;
  *
  * @author t.marx
  */
-@FeatureScope({FeatureScope.Scope.GLOBAL, FeatureScope.Scope.MODULE})
+@FeatureScope({FeatureScope.Scope.SITE, FeatureScope.Scope.MODULE})
 public record MessagingFeature(Messaging messaging) implements Feature {
 }

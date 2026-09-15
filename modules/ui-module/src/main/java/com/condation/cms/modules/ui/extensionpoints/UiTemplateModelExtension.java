@@ -22,7 +22,8 @@ package com.condation.cms.modules.ui.extensionpoints;
  */
 
 import com.condation.cms.api.extensions.TemplateModelExtendingExtensionPoint;
-import com.condation.cms.api.feature.features.DBFeature;
+import com.condation.cms.api.feature.features.RepositoryFeature;
+import com.condation.cms.api.repository.CollectionAccess;
 import com.condation.cms.api.feature.features.IsPreviewFeature;
 import com.condation.cms.api.request.RequestContext;
 import com.condation.cms.api.utils.JSONUtil;
@@ -119,7 +120,8 @@ public class UiTemplateModelExtension extends TemplateModelExtendingExtensionPoi
 			if (item == null) {
 				return "";
 			}
-			if (!siteContext.get(DBFeature.class).db().getCollections().isLocal(item.collection())) {
+			var collections = siteContext.get(RepositoryFeature.class).collectionRepository();
+			if (collections.access(item.collection()) != CollectionAccess.READ_WRITE) {
 				return "";
 			}
 			var options = new HashMap<>(additional);

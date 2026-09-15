@@ -31,6 +31,7 @@ import com.condation.cms.api.db.taxonomy.Taxonomy;
 import com.condation.cms.api.feature.features.RequestFeature;
 import com.condation.cms.api.mapper.ContentNodeMapper;
 import com.condation.cms.api.request.RequestContext;
+import com.condation.cms.api.repository.ContentRepository;
 import java.util.Map;
 import java.util.Optional;
 import org.assertj.core.api.Assertions;
@@ -56,6 +57,9 @@ public class TaxonomyResolverTest {
 	
 	@Mock
 	ContentNodeMapper contentNodeMapper;
+
+	@Mock
+	ContentRepository contentRepository;
 	
 	@Mock
 	Taxonomies taxonomies;
@@ -67,7 +71,8 @@ public class TaxonomyResolverTest {
 		Mockito.lenient().when(db.getTaxonomies()).thenReturn(taxonomies);
 		Mockito.lenient().when(taxonomies.forSlug("tags")).thenReturn(Optional.of(new Taxonomy()));
 		
-		taxonomyResolver = new TaxonomyResolver(contentRenderer, db, contentNodeMapper);
+		taxonomyResolver = new TaxonomyResolver(
+				contentRenderer, db, contentNodeMapper, contentRepository);
 	}
 
 	@Test

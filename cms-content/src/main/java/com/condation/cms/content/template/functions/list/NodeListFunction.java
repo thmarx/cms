@@ -23,14 +23,11 @@ package com.condation.cms.content.template.functions.list;
 
 import com.condation.cms.api.Constants;
 import com.condation.cms.api.db.ContentNode;
-import com.condation.cms.api.db.DB;
 import com.condation.cms.api.db.Page;
-import com.condation.cms.api.db.cms.ReadOnlyFile;
 import com.condation.cms.api.feature.features.ContentNodeMapperFeature;
-import com.condation.cms.api.feature.features.ContentParserFeature;
-import com.condation.cms.api.feature.features.MarkdownRendererFeature;
 import com.condation.cms.api.model.ListNode;
 import com.condation.cms.api.request.RequestContext;
+import com.condation.cms.api.repository.ContentRepository;
 import com.condation.cms.content.template.functions.AbstractCurrentNodeFunction;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -58,18 +55,17 @@ class NodeListFunction extends AbstractCurrentNodeFunction {
 		return true;
 	};
 
-	public NodeListFunction(DB db, ReadOnlyFile currentNode, RequestContext context) {
+	public NodeListFunction(ContentRepository contentRepository,
+			ContentNode currentNode, RequestContext context) {
 		super(
-				db,
 				currentNode,
-				context.get(ContentParserFeature.class).contentParser(),
-				context.get(MarkdownRendererFeature.class).markdownRenderer(),
-				context.get(ContentNodeMapperFeature.class).contentNodeMapper(),
+				contentRepository,
 				context);
 	}
 
-	public NodeListFunction(DB db, ReadOnlyFile currentNode, RequestContext context, boolean excludeIndexMd) {
-		this(db, currentNode, context);
+	public NodeListFunction(ContentRepository contentRepository,
+			ContentNode currentNode, RequestContext context, boolean excludeIndexMd) {
+		this(contentRepository, currentNode, context);
 		this.excludeIndexMd = excludeIndexMd;
 	}
 
@@ -92,17 +88,17 @@ class NodeListFunction extends AbstractCurrentNodeFunction {
 	Page<ListNode> getNodes(final String start, int page, int size, int excerptLength, final Comparator<ContentNode> comparator,
 			final Predicate<ContentNode> nodeFilter) {
 
-		ReadOnlyFile baseNode = null;
+		String baseNode = null;
 		String path = start;
 		// first select base node
 		if (start.startsWith("/")) {
-			baseNode = db.getFileSystem().contentBase();
+			baseNode = "";
 			path = start.substring(1);
 		} else if (start.equals(".")) {
-			baseNode = currentNode.getParent();
+			baseNode = currentDirectory();
 			path = "";
 		} else if (start.startsWith("./")) {
-			baseNode = currentNode.getParent();
+			baseNode = currentDirectory();
 			path = start.substring(2);
 		}
 
@@ -116,13 +112,12 @@ class NodeListFunction extends AbstractCurrentNodeFunction {
 		blog\/*\/*
 		 */
 		if (path.contains("*")) {
-			final ReadOnlyFile contentBase = db.getFileSystem().contentBase();
 			List<ContentNode> relevantPaths = getPaths(baseNode, path);
 
 			List<ContentNode> allContentNodes = new ArrayList<>();
 			relevantPaths.forEach((metaNode) -> {
 
-				List<ContentNode> children = db.getContent().listContent(contentBase, metaNode.uri());
+				List<ContentNode> children = contentRepository.children(metaNode.path());
 				allContentNodes.addAll(children);
 			});
 
@@ -141,7 +136,8 @@ class NodeListFunction extends AbstractCurrentNodeFunction {
 					.skip(skipCount)
 					.limit(size)
 					.forEach(node -> {
-						navNodes.add(contentNodeMapper.toListNode(node, context, excerptLength));
+						navNodes.add(context.get(ContentNodeMapperFeature.class).contentNodeMapper()
+								.toListNode(node, context, excerptLength));
 					});
 
 			int totalPages = (int) Math.ceil((float) total / size);
@@ -152,23 +148,24 @@ class NodeListFunction extends AbstractCurrentNodeFunction {
 		}
 	}
 
-	private List<ContentNode> getPaths(final ReadOnlyFile base, final String path) {
+	private List<ContentNode> getPaths(final String base, final String path) {
 		Set<ContentNode> relevantPaths = new HashSet<>();
 		var parts = path.split(Constants.SPLIT_PATH_PATTERN);
 
 		var part = parts[0];
 		List<ContentNode> nodes;
 		if ("*".equals(part)) {
-			nodes = db.getContent().listDirectories(base, "");
+			nodes = contentRepository.directories(repositoryPath(base, ""));
 		} else {
-			nodes = db.getContent().listDirectories(base, part);
+			nodes = contentRepository.directories(repositoryPath(base, part));
 		}
 		if (parts.length > 1) {
-			nodes.forEach((node) -> {
-				var newPath = Arrays.copyOfRange(parts, 1, parts.length);
-				var subnodes = getPaths(base.resolve(part), String.join("/", newPath));
-				relevantPaths.addAll(subnodes);
-			});
+			var remainingPath = String.join("/", Arrays.copyOfRange(parts, 1, parts.length));
+			if ("*".equals(part)) {
+				nodes.forEach(node -> relevantPaths.addAll(getPaths(node.path(), remainingPath)));
+			} else if (!nodes.isEmpty()) {
+				relevantPaths.addAll(getPaths(repositoryPath(base, part), remainingPath));
+			}
 		}
 		if (parts.length == 1) {
 			relevantPaths.addAll(nodes);
@@ -177,15 +174,14 @@ class NodeListFunction extends AbstractCurrentNodeFunction {
 		return new ArrayList<>(relevantPaths);
 	}
 
-	public Page<ListNode> getNodesFromBase(final ReadOnlyFile base, final String start, final int page, final int pageSize, 
+	public Page<ListNode> getNodesFromBase(final String base, final String start, final int page, final int pageSize,
 			final Comparator<ContentNode> comparator, final Predicate<ContentNode> nodeFilter) {
 		try {
 			List<ListNode> nodes = new ArrayList<>();
-			final List<ContentNode> navNodes = db.getContent()
-					.listContent(base, start)
+			final List<ContentNode> navNodes = contentRepository
+					.children(repositoryPath(base, start))
 					.stream().filter(nodeFilter)
 					.toList();
-			final ReadOnlyFile contentBase = db.getFileSystem().contentBase();
 			long total = navNodes.stream().filter(nodeNameFilter).count();
 			int skipCount = (page - 1) * pageSize;
 
@@ -194,7 +190,8 @@ class NodeListFunction extends AbstractCurrentNodeFunction {
 					.skip(skipCount)
 					.limit(pageSize)
 					.forEach(node -> {
-						nodes.add(contentNodeMapper.toListNode(node, context));
+						nodes.add(context.get(ContentNodeMapperFeature.class).contentNodeMapper()
+								.toListNode(node, context));
 					});
 
 			int totalPages = (int) Math.ceil((float) total / pageSize);

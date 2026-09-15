@@ -23,16 +23,11 @@ package com.condation.cms.templates.functions.impl;
 
 import com.condation.cms.api.content.MapAccess;
 import com.condation.cms.api.db.ContentNode;
-import com.condation.cms.api.db.DB;
-import com.condation.cms.api.db.cms.ReadOnlyFile;
-import com.condation.cms.api.feature.features.InjectorFeature;
+import com.condation.cms.api.feature.features.RepositoryFeature;
 import com.condation.cms.api.request.RequestContext;
-import com.condation.cms.api.utils.PathUtil;
-import com.condation.cms.core.content.ContentResolvingStrategy;
 import com.condation.cms.templates.functions.TemplateFunction;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 
 /**
@@ -43,7 +38,7 @@ import lombok.RequiredArgsConstructor;
 public abstract class AbstractNodeFunction implements TemplateFunction {
 	protected final RequestContext requestContext;
 
-	protected void extendMap (Map<String, Object> node, ReadOnlyFile contentFile) {
+	protected void extendMap (Map<String, Object> node, ContentNode contentNode) {
 		
 	}
 	
@@ -56,27 +51,25 @@ public abstract class AbstractNodeFunction implements TemplateFunction {
 		if (!(params[0] instanceof String)) {
 			return null;
 		}
-		String uri = ContentResolvingStrategy.uriToPath((String)params[0]);
-		
-		var db = requestContext.get(InjectorFeature.class).injector().getInstance(DB.class);
-		var contentBase = db.getFileSystem().contentBase();
-		
-		Optional<ReadOnlyFile> contentFileOpt = ContentResolvingStrategy.resolve(uri, db);
-		
-		if (contentFileOpt.isPresent()) {
-			var node_uri = PathUtil.toRelativeFile(contentFileOpt.get(), contentBase);
-			final Optional<ContentNode> nodeByUri = db.getContent().byUri(node_uri);
-			if (nodeByUri.isPresent()) {
-				var node = new HashMap<String, Object>();
-				node.put("meta", new MapAccess(nodeByUri.get().data()));
-				node.put("uri", PathUtil.toURL(contentFileOpt.get(), contentBase));
-				
-				extendMap(node, contentFileOpt.get());
-				
-				return node;
-			}
+		var repository = requestContext.get(RepositoryFeature.class).contentRepository();
+		var contentNode = repository.findByUrl((String) params[0])
+				.or(() -> repository.get(normalize((String) params[0])));
+		if (contentNode.isPresent()) {
+			var node = new HashMap<String, Object>();
+			node.put("meta", new MapAccess(contentNode.get().data()));
+			node.put("uri", contentNode.get().url());
+			extendMap(node, contentNode.get());
+			return node;
 		}
 		
 		return null;
+	}
+
+	private static String normalize(String value) {
+		var result = value.replace('\\', '/');
+		while (result.startsWith("/")) {
+			result = result.substring(1);
+		}
+		return result;
 	}
 }

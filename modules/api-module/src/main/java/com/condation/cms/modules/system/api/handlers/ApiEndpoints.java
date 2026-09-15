@@ -27,7 +27,7 @@ import com.condation.cms.modules.system.api.handlers.v1.ContentHandler;
 import com.condation.cms.api.extensions.http.APIHandlerExtensionPoint;
 import com.condation.cms.api.extensions.http.PathMapping;
 import com.condation.cms.api.feature.features.ConfigurationFeature;
-import com.condation.cms.api.feature.features.DBFeature;
+import com.condation.cms.api.feature.features.RepositoryFeature;
 import com.condation.cms.modules.system.api.services.ContentService;
 import com.condation.cms.modules.system.api.handlers.v1.NavigationHandler;
 import com.condation.cms.modules.system.api.handlers.v1.QueryHandler;
@@ -50,23 +50,24 @@ public class ApiEndpoints extends APIHandlerExtensionPoint {
 		
 		var siteProperties = getContext().get(ConfigurationFeature.class).configuration().get(SiteConfiguration.class).siteProperties();
 		var whitelist = siteProperties.getOrDefault("api.whitelist", List.of(""));
+		var contentRepository = getRequestContext().get(RepositoryFeature.class).contentRepository();
 		
 		mapping.add(PathSpec.from("/v1/content/*"), 
 				"GET", 
 				new ContentHandler(new ContentService(
-						getContext().get(DBFeature.class).db(),
+						contentRepository,
 						new HashSet<>(whitelist)
 				))
 		);
 		
 		mapping.add(PathSpec.from("/v1/navigation/*"), 
 				"GET", 
-				new NavigationHandler(getContext().get(DBFeature.class).db(), getRequestContext())
+				new NavigationHandler(contentRepository, getRequestContext())
 		);
 		
 		mapping.add(PathSpec.from("/v1/query"),
 				"POST",
-				new QueryHandler(getContext().get(DBFeature.class).db())
+				new QueryHandler(contentRepository)
 		);
 
 		return mapping;

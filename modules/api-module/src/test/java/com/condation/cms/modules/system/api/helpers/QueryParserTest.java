@@ -21,15 +21,13 @@ package com.condation.cms.modules.system.api.helpers;
  * #L%
  */
 
-import com.condation.cms.api.db.Content;
 import com.condation.cms.api.db.ContentQuery;
-import com.condation.cms.api.db.DB;
+import com.condation.cms.api.repository.ContentRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import static org.mockito.ArgumentMatchers.any;
 
 import static org.mockito.Mockito.*;
 import static org.assertj.core.api.Assertions.*;
@@ -38,10 +36,7 @@ import static org.assertj.core.api.Assertions.*;
 public class QueryParserTest {
 
     @Mock
-    private DB db;
-
-    @Mock
-    private Content content;
+    private ContentRepository contentRepository;
 
     @Mock
     private ContentQuery contentQuery;
@@ -54,14 +49,13 @@ public class QueryParserTest {
     @BeforeEach
     void setUp() {
         queryParser = new QueryParser();
-        when(db.getContent()).thenReturn(content);
-        when(content.query(any())).thenReturn(contentQuery);
+        when(contentRepository.query()).thenReturn(contentQuery);
     }
 
     @Test
     void testSimpleQuery() {
         String json = "{\"contentType\": \"post\"}";
-        queryParser.parse(db, json);
+        queryParser.parse(contentRepository, json);
         verify(contentQuery).contentType("post");
         verify(contentQuery).get();
     }
@@ -69,7 +63,7 @@ public class QueryParserTest {
     @Test
     void testWhereQuery() {
         String json = "{\"where\": [{\"field\": \"author\", \"value\": \"John Doe\"}]}";
-        queryParser.parse(db, json);
+        queryParser.parse(contentRepository, json);
         verify(contentQuery).where("author", "=", "John Doe");
         verify(contentQuery).get();
     }
@@ -78,7 +72,7 @@ public class QueryParserTest {
     void testOrderByQuery() {
         String json = "{\"orderby\": {\"field\": \"date\", \"direction\": \"desc\"}}";
         when(contentQuery.orderby("date")).thenReturn(sort);
-        queryParser.parse(db, json);
+        queryParser.parse(contentRepository, json);
         verify(sort).desc();
         verify(contentQuery).get();
     }
@@ -86,7 +80,7 @@ public class QueryParserTest {
     @Test
     void testPageQuery() {
         String json = "{\"page\": {\"number\": 2, \"size\": 10}}";
-        queryParser.parse(db, json);
+        queryParser.parse(contentRepository, json);
         verify(contentQuery).page(2, 10);
     }
 
@@ -94,7 +88,7 @@ public class QueryParserTest {
     void testComplexQuery() {
         String json = "{\"contentType\": \"article\", \"where\": [{\"field\": \"category\", \"value\": \"tech\"}], \"orderby\": {\"field\": \"views\", \"direction\": \"desc\"}}";
         when(contentQuery.orderby("views")).thenReturn(sort);
-        queryParser.parse(db, json);
+        queryParser.parse(contentRepository, json);
         verify(contentQuery).contentType("article");
         verify(contentQuery).where("category", "=", "tech");
         verify(sort).desc();

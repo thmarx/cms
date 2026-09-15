@@ -95,6 +95,8 @@ public abstract class Constants {
 		public static final String JSON = "application/json";
 	}
 	
+	public static final String PATH_SEPARATOR = "/";
+
 	public static final String SPLIT_PATH_PATTERN = Pattern.quote("/");
 	
 	public static final Pattern TAXONOMY_VALUE = Pattern.compile("taxonomy\\.([a-zA-Z0-9-]+)\\.yaml");

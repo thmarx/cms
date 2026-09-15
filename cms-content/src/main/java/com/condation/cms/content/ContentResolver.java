@@ -26,12 +26,11 @@ import com.condation.cms.api.content.ContentResponse;
 import com.condation.cms.api.content.DefaultContentResponse;
 import com.condation.cms.api.content.RedirectContentResponse;
 import com.condation.cms.api.db.ContentNode;
-import com.condation.cms.api.db.DB;
-import com.condation.cms.api.db.NodeVisibility;
 import com.condation.cms.api.feature.features.CurrentNodeFeature;
 import com.condation.cms.api.feature.features.IsPreviewFeature;
 import com.condation.cms.api.feature.features.RequestFeature;
 import com.condation.cms.api.request.RequestContext;
+import com.condation.cms.api.repository.ContentRepository;
 import com.condation.cms.api.variants.Variant;
 import com.condation.cms.api.variants.VariantSelector;
 import com.condation.cms.api.utils.HTTPUtil;
@@ -51,25 +50,17 @@ public class ContentResolver {
 
 	private final ContentRenderer contentRenderer;
 	
-	private final DB db;
-
-	private final VariantResolver variantResolver;
+	private final ContentRepository contentRepository;
 
 	private final VariantSelector variantSelector;
 
-	public ContentResolver(ContentRenderer contentRenderer, DB db) {
-		this(contentRenderer, db, new VariantResolver(db), new DefaultVariantSelector());
-	}
-
 	public ContentResolver(
 			ContentRenderer contentRenderer,
-			DB db,
-			VariantResolver variantResolver,
+			ContentRepository contentRepository,
 			VariantSelector variantSelector
 	) {
 		this.contentRenderer = contentRenderer;
-		this.db = db;
-		this.variantResolver = variantResolver;
+		this.contentRepository = contentRepository;
 		this.variantSelector = variantSelector;
 	}
 	
@@ -85,13 +76,13 @@ public class ContentResolver {
         final String uri = context.get(RequestFeature.class).uri();
 		var path = ContentResolvingStrategy.uriToPath(uri);
 
-		Optional<ContentNode> contentNodeOpt = db.getContent().byUrl(uri);
+		Optional<ContentNode> contentNodeOpt = contentRepository.findByUrl(uri);
 
 		// handle alias
 		ContentNode contentNode = null;
         Optional<String> aliasRedirectUrl = Optional.empty();
 		if (contentNodeOpt.isEmpty()) {
-			var query = db.getContent().query((node, count) -> node);
+			var query = contentRepository.query();
 			var result = query.whereContains(Constants.MetaFields.ALIASES, "/" + path).get();
 			if (!result.isEmpty()) {
 				contentNode = result.getFirst();
@@ -105,7 +96,7 @@ public class ContentResolver {
 			return Optional.empty();
 		}
 		
-		if (checkVisibility && !db.getContent().isVisible(contentNode)) {
+		if (checkVisibility && !contentRepository.isVisible(contentNode)) {
 			return Optional.empty();
 		}
 		
@@ -124,27 +115,27 @@ public class ContentResolver {
 
 		var selection = variantSelector.select(
 				contentNode,
-				variantResolver.getVariants(contentNode),
+				contentRepository.variants(contentNode),
 				context
 		);
 		var selectedNode = selection.variant()
 				.map(Variant::node)
 				.filter(node -> !checkVisibility
 						|| context.has(IsPreviewFeature.class)
-						|| NodeVisibility.isVisible(node))
+						|| contentRepository.isVisible(node))
 				.orElse(contentNode);
-
-		var contentFile = db.getFileSystem().contentBase().resolve(selectedNode.path());
 
 		context.add(CurrentNodeFeature.class, new CurrentNodeFeature(selectedNode));
 		
 		try {
-			
-			List<ContentNode> sectionEntries = db.getContent().listSectionEntries(contentFile);
-			
-			Map<String, List<SectionEntry>> renderedSectionEntries = contentRenderer.renderSectionEntries(sectionEntries, context);
-			
-			var content = contentRenderer.render(contentFile, context, renderedSectionEntries);
+			var document = contentRepository.load(selectedNode);
+			if (document.isEmpty()) {
+				return Optional.empty();
+			}
+			var sections = contentRepository.sections(selectedNode);
+			Map<String, List<SectionEntry>> renderedSectionEntries =
+					contentRenderer.renderSections(sections, context);
+			var content = contentRenderer.render(document.get(), context, renderedSectionEntries);
 			
 			var contentType = selectedNode.contentType();
 			

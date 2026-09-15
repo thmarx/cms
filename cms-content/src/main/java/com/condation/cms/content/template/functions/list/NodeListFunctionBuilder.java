@@ -22,14 +22,11 @@ package com.condation.cms.content.template.functions.list;
  */
 import com.condation.cms.api.Constants;
 import com.condation.cms.api.db.ContentNode;
-import com.condation.cms.api.db.DB;
 import com.condation.cms.api.db.Page;
-import com.condation.cms.api.db.cms.ReadOnlyFile;
 import com.condation.cms.api.feature.features.ContentNodeMapperFeature;
-import com.condation.cms.api.feature.features.ContentParserFeature;
-import com.condation.cms.api.feature.features.MarkdownRendererFeature;
 import com.condation.cms.api.model.ListNode;
 import com.condation.cms.api.request.RequestContext;
+import com.condation.cms.api.repository.ContentRepository;
 import com.condation.cms.api.utils.NodeUtil;
 import com.condation.cms.content.template.functions.AbstractCurrentNodeFunction;
 import java.util.Comparator;
@@ -72,16 +69,15 @@ public class NodeListFunctionBuilder extends AbstractCurrentNodeFunction {
 		return filename1.compareTo(filename2);
 	};
 
-	public NodeListFunctionBuilder(DB db, ReadOnlyFile currentNode, RequestContext context) {
+	public NodeListFunctionBuilder(ContentRepository contentRepository,
+			ContentNode currentNode, RequestContext context) {
 		super(
-				db,
 				currentNode,
-				context.get(ContentParserFeature.class).contentParser(),
-				context.get(MarkdownRendererFeature.class).markdownRenderer(),
-				context.get(ContentNodeMapperFeature.class).contentNodeMapper(),
+				contentRepository,
 				context);
-		this.nodeListFunction = new NodeListFunction(db, currentNode, context);
-		this.nodeListFunctionNoIndex = new NodeListFunction(db, currentNode, context, true);
+		this.nodeListFunction = new NodeListFunction(contentRepository, currentNode, context);
+		this.nodeListFunctionNoIndex = new NodeListFunction(
+				contentRepository, currentNode, context, true);
 	}
 
 	public NodeListFunctionBuilder from(String from) {

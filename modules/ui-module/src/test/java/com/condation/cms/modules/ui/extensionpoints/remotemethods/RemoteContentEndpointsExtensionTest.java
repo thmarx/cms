@@ -21,13 +21,8 @@ package com.condation.cms.modules.ui.extensionpoints.remotemethods;
  * #L%
  */
 
-import com.condation.cms.api.db.Content;
-import com.condation.cms.api.db.DB;
-import com.condation.cms.api.db.DBFileSystem;
-import com.condation.cms.api.db.cms.ReadOnlyFile;
 import com.condation.cms.api.db.collection.CollectionItem;
 import com.condation.cms.api.db.collection.CollectionItemMetadata;
-import com.condation.cms.api.db.collection.Collections;
 import com.condation.cms.api.configuration.Configuration;
 import com.condation.cms.api.configuration.configs.CollectionConfiguration;
 import com.condation.cms.api.configuration.configs.CollectionDefinition;
@@ -36,7 +31,6 @@ import com.condation.cms.api.db.ContentQuery;
 import com.condation.cms.api.db.Page;
 import com.condation.cms.api.db.collection.Collection;
 import com.condation.cms.api.feature.features.ConfigurationFeature;
-import com.condation.cms.api.feature.features.DBFeature;
 import com.condation.cms.api.feature.features.CurrentCollectionItemFeature;
 import com.condation.cms.api.feature.features.CurrentNodeFeature;
 import com.condation.cms.api.feature.features.RequestFeature;
@@ -45,6 +39,11 @@ import com.condation.cms.api.db.ContentNode;
 import com.condation.cms.api.request.RequestContext;
 import com.condation.cms.api.request.RequestContextScope;
 import com.condation.cms.api.ui.rpc.RPCException;
+import com.condation.cms.api.repository.ContentRepository;
+import com.condation.cms.api.repository.CollectionAccess;
+import com.condation.cms.api.repository.CollectionRepository;
+import com.condation.cms.api.repository.MutableCollectionRepository;
+import com.condation.cms.api.repository.MutableContentRepository;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
@@ -70,41 +69,45 @@ class RemoteContentEndpointsExtensionTest {
 	private SiteModuleContext moduleContext;
 
 	@Mock
-	private DB db;
+	private MutableContentRepository contentRepository;
 
 	@Mock
-	private Content content;
-
-	@Mock
-	private DBFileSystem fileSystem;
-
-	@Mock
-	private ReadOnlyFile contentBase;
-
-	@Mock
-	private ReadOnlyFile contentFile;
-
-	@Mock
-	private Collections collections;
+	private MutableCollectionRepository collectionRepository;
 
 	private RemoteContentEndpointsExtension endpoints;
 
 	@BeforeEach
 	void setUp() {
-		endpoints = new RemoteContentEndpointsExtension();
+		endpoints = new RemoteContentEndpointsExtension() {
+			@Override
+			protected ContentRepository getContentRepository(Map<String, Object> parameters) {
+				return contentRepository;
+			}
+
+			@Override
+			protected MutableContentRepository getMutableContentRepository(Map<String, Object> parameters) {
+				return contentRepository;
+			}
+
+			@Override
+			protected CollectionRepository getCollectionRepository(Map<String, Object> parameters) {
+				return collectionRepository;
+			}
+
+			@Override
+			protected MutableCollectionRepository getMutableCollectionRepository(Map<String, Object> parameters) {
+				return collectionRepository;
+			}
+		};
 		endpoints.setContext(moduleContext);
-		when(moduleContext.get(DBFeature.class)).thenReturn(new DBFeature(db));
-		lenient().when(db.getFileSystem()).thenReturn(fileSystem);
-		lenient().when(fileSystem.contentBase()).thenReturn(contentBase);
-		lenient().when(db.getCollections()).thenReturn(collections);
-		lenient().when(collections.isLocal("blog")).thenReturn(true);
+		lenient().when(collectionRepository.access("blog")).thenReturn(CollectionAccess.READ_WRITE);
 	}
 
 	@Test
 	void getContent_throwsRPCException_whenParsingFails() throws IOException {
-		when(contentBase.resolve("broken.md")).thenReturn(contentFile);
-		when(contentFile.exists()).thenReturn(true);
-		when(contentFile.getContent()).thenThrow(new IOException("disk error"));
+		var node = new ContentNode("broken.md", "/broken", "broken.md", Map.of());
+		when(contentRepository.get("broken.md")).thenReturn(Optional.of(node));
+		when(contentRepository.load(node)).thenThrow(new IOException("disk error"));
 
 		Map<String, Object> params = Map.of("uri", "broken.md");
 
@@ -115,9 +118,9 @@ class RemoteContentEndpointsExtensionTest {
 
 	@Test
 	void setContent_throwsRPCException_whenParsingFails() throws IOException {
-		when(contentBase.resolve("broken.md")).thenReturn(contentFile);
-		when(contentFile.exists()).thenReturn(true);
-		when(contentFile.getContent()).thenThrow(new IOException("disk error"));
+		var node = new ContentNode("broken.md", "/broken", "broken.md", Map.of());
+		when(contentRepository.get("broken.md")).thenReturn(Optional.of(node));
+		when(contentRepository.load(node)).thenThrow(new IOException("disk error"));
 
 		Map<String, Object> params = Map.of("uri", "broken.md", "content", "hello");
 
@@ -134,9 +137,9 @@ class RemoteContentEndpointsExtensionTest {
 				CurrentNodeFeature.class,
 				new CurrentNodeFeature(new ContentNode(uri, "/about", "about.md", Map.of()))
 		);
-		when(contentBase.resolve(uri)).thenReturn(contentFile);
-		when(contentFile.exists()).thenReturn(true);
-		when(contentFile.getContent()).thenThrow(new IOException("variant selected"));
+		var node = new ContentNode(uri, "/about", "about.md", Map.of());
+		when(contentRepository.get(uri)).thenReturn(Optional.of(node));
+		when(contentRepository.load(node)).thenThrow(new IOException("variant selected"));
 
 		assertThatThrownBy(() -> ScopedValue.where(
 				RequestContextScope.REQUEST_CONTEXT,
@@ -148,7 +151,7 @@ class RemoteContentEndpointsExtensionTest {
 
 	@Test
 	void rejectsEditingAReferencedCollectionItem() {
-		when(collections.isLocal("blog")).thenReturn(false);
+		when(collectionRepository.access("blog")).thenReturn(CollectionAccess.READ_ONLY);
 		var requestContext = new RequestContext();
 		requestContext.add(
 				CurrentCollectionItemFeature.class,
@@ -170,10 +173,8 @@ class RemoteContentEndpointsExtensionTest {
 				"other.md",
 				Map.of()
 		);
-		when(db.getContent()).thenReturn(content);
-		when(content.byUrl("/total-other-page")).thenReturn(Optional.of(node));
-		when(contentBase.resolve("pages/other.md")).thenReturn(contentFile);
-		when(content.listSectionEntries(contentFile)).thenReturn(List.of());
+		when(contentRepository.findByUrl("/total-other-page")).thenReturn(Optional.of(node));
+		when(contentRepository.sections(node)).thenReturn(List.of());
 
 		var requestContext = new RequestContext();
 		requestContext.add(
@@ -194,12 +195,11 @@ class RemoteContentEndpointsExtensionTest {
 				.containsEntry("canonicalUri", "pages/other.md")
 				.containsEntry("contentKind", "content")
 				.containsEntry("supportsVariants", true);
-		verify(content).byUrl("/total-other-page");
+		verify(contentRepository).findByUrl("/total-other-page");
 	}
 
 	@Test
 	void getContentNodeKeepsPublicCollectionRouteAndDisablesVariants() throws Exception {
-		var nonExistingPath = mock(ReadOnlyFile.class);
 		var authorCollection = mock(Collection.class);
 		@SuppressWarnings("unchecked")
 		var query = (ContentQuery<CollectionItemMetadata>) mock(ContentQuery.class);
@@ -208,11 +208,8 @@ class RemoteContentEndpointsExtensionTest {
 		var metadata = new CollectionItemMetadata(
 				item.id(), item.collection(), item.path(), item.meta());
 
-		when(db.getContent()).thenReturn(content);
-		when(content.byUrl("/people/jane-doe")).thenReturn(Optional.empty());
-		when(contentBase.resolve("people/jane-doe")).thenReturn(nonExistingPath);
-		when(contentBase.resolve("people/jane-doe.md")).thenReturn(nonExistingPath);
-		when(collections.collection("authors")).thenReturn(authorCollection);
+		when(contentRepository.findByUrl("/people/jane-doe")).thenReturn(Optional.empty());
+		when(collectionRepository.collection("authors")).thenReturn(authorCollection);
 		when(authorCollection.metadataQuery()).thenReturn(query);
 		when(query.where("slug", "jane-doe")).thenReturn(query);
 		when(query.page(1, 2)).thenReturn(new Page<>(1, 2, 1, 1, List.of(metadata)));

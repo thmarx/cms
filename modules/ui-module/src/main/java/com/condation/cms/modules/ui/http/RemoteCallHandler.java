@@ -25,6 +25,7 @@ import com.condation.cms.api.feature.features.CurrentNodeFeature;
 import com.condation.cms.api.feature.features.CurrentCollectionItemFeature;
 import com.condation.cms.api.db.ContentNode;
 import com.condation.cms.api.feature.features.DBFeature;
+import com.condation.cms.api.feature.features.RepositoryFeature;
 import com.condation.cms.api.request.RequestContext;
 import com.condation.cms.api.ui.rpc.RPCError;
 import com.condation.cms.api.ui.rpc.RPCException;
@@ -104,12 +105,12 @@ public class RemoteCallHandler extends JettyHandler {
 		if (uri == null || uri.isBlank()) {
 			return;
 		}
-		if (!moduleContext.has(DBFeature.class)) {
+		if (!moduleContext.has(RepositoryFeature.class)) {
 			return;
 		}
-		var content = moduleContext.get(DBFeature.class).db().getContent();
-		content.byUri(uri.trim())
-				.or(() -> content.byPath(uri.trim()))
+		var content = moduleContext.get(RepositoryFeature.class).contentRepository();
+		content.findByUrl(uri.trim())
+				.or(() -> content.get(uri.trim()))
 				.ifPresent(node -> requestContext.add(
 						CurrentNodeFeature.class,
 						new CurrentNodeFeature(node)
@@ -125,12 +126,13 @@ public class RemoteCallHandler extends JettyHandler {
 		if (itemId == null || itemId.isBlank()) {
 			return false;
 		}
-		if (!moduleContext.has(DBFeature.class)) {
+		if (!moduleContext.has(RepositoryFeature.class)) {
 			return false;
 		}
 		try {
-			var item = moduleContext.get(DBFeature.class).db()
-					.getCollections().collection(collectionName.trim()).item(itemId.trim());
+			var item = moduleContext.get(RepositoryFeature.class)
+					.collectionRepository()
+					.get(collectionName.trim(), itemId.trim());
 			item.ifPresent(value -> {
 				requestContext.add(CurrentCollectionItemFeature.class, new CurrentCollectionItemFeature(value));
 				requestContext.add(CurrentNodeFeature.class, new CurrentNodeFeature(new ContentNode(

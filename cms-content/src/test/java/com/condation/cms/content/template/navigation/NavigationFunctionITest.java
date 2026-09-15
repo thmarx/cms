@@ -35,11 +35,14 @@ import com.condation.cms.api.feature.features.SitePropertiesFeature;
 import com.condation.cms.api.mapper.ContentNodeMapper;
 import com.condation.cms.api.request.RequestContext;
 import com.condation.cms.api.request.RequestContextScope;
+import com.condation.cms.api.repository.ContentRepository;
 import com.condation.cms.content.DefaultContentParser;
 import com.condation.cms.content.markdown.module.CMSMarkdownRenderer;
 import com.condation.cms.content.template.functions.navigation.NavigationFunction;
 import com.condation.cms.core.eventbus.DefaultEventBus;
 import com.condation.cms.filesystem.FileDB;
+import com.condation.cms.filesystem.FileSystemContentRepository;
+import com.condation.cms.filesystem.FileSystemContentStore;
 import com.condation.cms.filesystem.NIOReadOnlyFile;
 import com.condation.cms.hooksystem.CMSHookSystem;
 import java.nio.file.Path;
@@ -62,6 +65,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 public class NavigationFunctionITest {
 
 	private static FileDB db;
+	private static ContentRepository contentRepository;
 
 	@Mock
 	private Request request;
@@ -89,6 +93,9 @@ public class NavigationFunctionITest {
 			}
 		}, config);
 		db.init();
+		contentRepository = new FileSystemContentRepository(
+				db.getContent(), db.getFileSystem(),
+				new FileSystemContentStore(db.getFileSystem()), contentParser);
 	}
 
 	@BeforeEach
@@ -106,7 +113,7 @@ public class NavigationFunctionITest {
 		requestContext.add(ConfigurationFeature.class, configFeature);
 		requestContext.add(SitePropertiesFeature.class, new SitePropertiesFeature(siteProperties));
 		requestContext.add(ContentParserFeature.class, new ContentParserFeature(contentParser));
-		requestContext.add(ContentNodeMapperFeature.class, new ContentNodeMapperFeature(new ContentNodeMapper(db, contentParser)));
+		requestContext.add(ContentNodeMapperFeature.class, new ContentNodeMapperFeature(new ContentNodeMapper(contentRepository)));
 		requestContext.add(MarkdownRendererFeature.class, new MarkdownRendererFeature(new CMSMarkdownRenderer()));
 		requestContext.add(HookSystemFeature.class, new HookSystemFeature(new CMSHookSystem()));
 
@@ -121,8 +128,9 @@ public class NavigationFunctionITest {
 	@Test
 	void test_root() {
 		ScopedValue.where(RequestContextScope.REQUEST_CONTEXT, requestContext).run(() -> {
-			var currentNode = db.getFileSystem().contentBase();
-			NavigationFunction fn = new NavigationFunction(db, currentNode, requestContext);
+			var currentNode = contentRepository.get("index.md").orElseThrow();
+			NavigationFunction fn = new NavigationFunction(
+					contentRepository, currentNode, requestContext);
 
 			var nodes = fn.json().list(".");
 

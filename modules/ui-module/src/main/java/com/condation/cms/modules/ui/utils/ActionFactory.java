@@ -46,7 +46,8 @@ import com.condation.cms.auth.services.AuthorizationService;
 import com.condation.cms.auth.services.User;
 import com.condation.cms.auth.services.RoleService;
 import com.condation.cms.api.feature.features.InjectorFeature;
-import com.condation.cms.api.feature.features.DBFeature;
+import com.condation.cms.api.feature.features.RepositoryFeature;
+import com.condation.cms.api.repository.CollectionAccess;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -188,8 +189,9 @@ public class ActionFactory {
                     .build();
         }).forEach(menu::addMenuEntry);
 
-		context.get(DBFeature.class).db().getCollections().names().stream()
-				.filter(context.get(DBFeature.class).db().getCollections()::isLocal)
+		var collections = context.get(RepositoryFeature.class).collectionRepository();
+		collections.names().stream()
+				.filter(name -> collections.access(name) == CollectionAccess.READ_WRITE)
 				.sorted()
 				.map(name -> MenuEntry.builder()
 						.id("collection-" + name)

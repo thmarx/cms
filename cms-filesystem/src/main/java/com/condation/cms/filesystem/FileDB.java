@@ -28,8 +28,8 @@ import com.condation.cms.api.db.Content;
 import com.condation.cms.api.db.DB;
 import com.condation.cms.api.db.DBFileSystem;
 import com.condation.cms.api.db.taxonomy.Taxonomies;
-import com.condation.cms.api.db.collection.Collections;
 import com.condation.cms.api.eventbus.EventBus;
+import com.condation.cms.api.repository.MutableCollectionRepository;
 import com.condation.cms.filesystem.taxonomy.FileTaxonomies;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -52,8 +52,8 @@ public class FileDB implements DB {
 	
 	private FileSystem fileSystem;
 	private FileContent content;
-	private FileCollections localCollections;
-	private Collections collections;
+	private FileSystemCollectionRepository localCollectionRepository;
+	private MutableCollectionRepository collectionRepository;
 	private ReadOnlyFileSystem readOnlyFileSystem;
 	
 	private FileTaxonomies taxonomies;
@@ -71,13 +71,15 @@ public class FileDB implements DB {
 		readOnlyFileSystem = new WrappedReadOnlyFileSystem(fileSystem);
 		
 		content = new FileContent(fileSystem);
-		localCollections = new FileCollections(siteProperties.id(), hostBaseDirectory, contentParser);
-		localCollections.init();
+		localCollectionRepository = new FileSystemCollectionRepository(
+				siteProperties.id(), hostBaseDirectory, contentParser);
+		localCollectionRepository.init();
 		var collectionConfiguration = configuration.get(
 				com.condation.cms.api.configuration.configs.CollectionConfiguration.class);
-		collections = collectionConfiguration == null
-				? localCollections
-				: new ReferencedCollections(siteProperties.id(), localCollections, collectionConfiguration);
+		collectionRepository = collectionConfiguration == null
+				? localCollectionRepository
+				: new ReferencedCollectionRepository(
+						siteProperties.id(), localCollectionRepository, collectionConfiguration);
 		
 		taxonomies = new FileTaxonomies(configuration, content);	
 	}
@@ -97,7 +99,7 @@ public class FileDB implements DB {
 	public void reindex() {
 		var siteProperties = configuration.get(SiteConfiguration.class).siteProperties();
 		fileSystem.reindex(indexFields(siteProperties.get("index.fields")));
-		localCollections.reindex();
+		localCollectionRepository.reindex();
 	}
 
 	@Deprecated
@@ -114,8 +116,8 @@ public class FileDB implements DB {
 	@Override
 	public void close() throws Exception {
 		try {
-			if (localCollections != null) {
-				localCollections.close();
+			if (localCollectionRepository != null) {
+				localCollectionRepository.close();
 			}
 		} finally {
 			fileSystem.shutdown();
@@ -128,8 +130,8 @@ public class FileDB implements DB {
 	}
 
 	@Override
-	public Collections getCollections() {
-		return collections;
+	public MutableCollectionRepository getCollectionRepository() {
+		return collectionRepository;
 	}
 
 	@Override

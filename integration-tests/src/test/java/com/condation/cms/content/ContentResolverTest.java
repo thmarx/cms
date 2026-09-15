@@ -36,10 +36,13 @@ import com.condation.cms.api.feature.features.IsPreviewFeature;
 import com.condation.cms.api.feature.features.RequestFeature;
 import com.condation.cms.api.markdown.MarkdownRenderer;
 import com.condation.cms.api.template.TemplateEngine;
+import com.condation.cms.api.repository.ContentRepository;
 import static com.condation.cms.content.ContentRendererNGTest.contentRenderer;
 import static com.condation.cms.content.ContentRendererNGTest.moduleManager;
 import com.condation.cms.core.eventbus.DefaultEventBus;
 import com.condation.cms.filesystem.FileDB;
+import com.condation.cms.filesystem.FileSystemContentRepository;
+import com.condation.cms.filesystem.FileSystemContentStore;
 import com.condation.cms.filesystem.NIOReadOnlyFile;
 import com.condation.cms.test.TestSiteProperties;
 import java.io.IOException;
@@ -60,6 +63,7 @@ public class ContentResolverTest {
 	static MarkdownRenderer markdownRenderer;
 	static ContentResolver contentResolver;
 	static FileDB db;
+	static ContentRepository contentRepository;
 
 	@BeforeAll
 	public static void setup() throws IOException {
@@ -83,13 +87,18 @@ public class ContentResolverTest {
 		db.init();
 		markdownRenderer = TestHelper.getRenderer();
 		TemplateEngine templates = new TestTemplateEngine(db);
+		contentRepository = new FileSystemContentRepository(
+				db.getContent(), db.getFileSystem(),
+				new FileSystemContentStore(db.getFileSystem()), contentParser);
 
-		contentRenderer = new DefaultContentRenderer(contentParser,
-				() -> templates,
+		contentRenderer = new DefaultContentRenderer(() -> templates,
 				db,
 				new TestSiteProperties(Map.of()),
-				moduleManager);
-		contentResolver = new ContentResolver(contentRenderer, db);
+				moduleManager,
+				contentRepository,
+				db.getCollectionRepository());
+		contentResolver = new ContentResolver(
+				contentRenderer, contentRepository, new DefaultVariantSelector());
 	}
 
 	@AfterAll

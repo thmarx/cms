@@ -20,32 +20,22 @@ package com.condation.cms.content.template.functions;
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  * #L%
  */
-import com.condation.cms.api.content.ContentParser;
-import com.condation.cms.api.db.DB;
-import com.condation.cms.api.db.cms.ReadOnlyFile;
+import com.condation.cms.api.db.ContentNode;
 import com.condation.cms.api.feature.features.IsPreviewFeature;
-import com.condation.cms.api.mapper.ContentNodeMapper;
-import com.condation.cms.api.markdown.MarkdownRenderer;
 import com.condation.cms.api.request.RequestContext;
 import com.condation.cms.api.request.RequestContextScope;
-import java.io.IOException;
-import java.util.Optional;
+import com.condation.cms.api.repository.ContentRepository;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  *
  * @author t.marx
  */
 @RequiredArgsConstructor
-@Slf4j
 public abstract class AbstractCurrentNodeFunction {
 
-	protected final DB db;
-	protected final ReadOnlyFile currentNode;
-	protected final ContentParser contentParser;
-	protected final MarkdownRenderer markdownRenderer;
-	protected final ContentNodeMapper contentNodeMapper;
+	protected final ContentNode currentNode;
+	protected final ContentRepository contentRepository;
 	protected final RequestContext context;
 
 	protected boolean isPreview() {
@@ -65,18 +55,44 @@ public abstract class AbstractCurrentNodeFunction {
 		return IsPreviewFeature.Mode.PREVIEW.getValue();
 	}
 
-	protected Optional<ContentParser.Content> parse(ReadOnlyFile node) {
-		try {
-			//Path rel = contentBase.relativize(node);
-			if (node.isDirectory()) {
-				node = node.resolve("index.md");
-			}
-			var md = contentParser.parse(node);
-
-			return Optional.of(md);
-		} catch (IOException ex) {
-			log.error(null, ex);
+	protected String repositoryPath(String basePath, String path) {
+		basePath = normalize(basePath);
+		var childPath = path.replace('\\', '/');
+		while (childPath.startsWith("./")) {
+			childPath = childPath.substring(2);
 		}
-		return Optional.empty();
+		while (childPath.startsWith("/")) {
+			childPath = childPath.substring(1);
+		}
+		if (".".equals(childPath)) {
+			childPath = "";
+		}
+		if (childPath.isEmpty()) {
+			return basePath;
+		}
+		return basePath.isEmpty() ? childPath : basePath + "/" + childPath;
+	}
+
+	protected String currentDirectory() {
+		if (currentNode == null) {
+			return "";
+		}
+		var path = normalize(currentNode.path());
+		if (currentNode.isDirectory()) {
+			return path;
+		}
+		var separator = path.lastIndexOf('/');
+		return separator < 0 ? "" : path.substring(0, separator);
+	}
+
+	protected static String normalize(String path) {
+		var normalized = path == null ? "" : path.replace('\\', '/');
+		while (normalized.startsWith("/")) {
+			normalized = normalized.substring(1);
+		}
+		while (normalized.endsWith("/") && !normalized.isEmpty()) {
+			normalized = normalized.substring(0, normalized.length() - 1);
+		}
+		return normalized;
 	}
 }

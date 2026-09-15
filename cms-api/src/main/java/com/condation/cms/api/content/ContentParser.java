@@ -22,6 +22,7 @@ package com.condation.cms.api.content;
  */
 
 import com.condation.cms.api.db.cms.ReadOnlyFile;
+import com.condation.cms.api.repository.ContentResource;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Map;
@@ -36,8 +37,20 @@ public interface ContentParser {
     
     void clearCache(String uri);
 	
+	Content parse(final ContentResource contentResource) throws IOException;
+
+	Map<String, Object> parseMeta(final ContentResource contentResource) throws IOException;
+
+	/**
+	 * @deprecated use {@link #parse(ContentResource)} instead
+	 */
+	@Deprecated(since = "8.4.0", forRemoval = false)
 	Content parse(final ReadOnlyFile contentFile) throws IOException;
 	
+	/**
+	 * @deprecated use {@link #parseMeta(ContentResource)} instead
+	 */
+	@Deprecated(since = "8.4.0", forRemoval = false)
 	Map<String, Object> parseMeta(final ReadOnlyFile contentFile) throws IOException;
 	
 	record ContentRecord(String content, String meta) implements Serializable {}

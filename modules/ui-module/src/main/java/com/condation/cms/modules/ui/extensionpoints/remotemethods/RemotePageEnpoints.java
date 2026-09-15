@@ -22,11 +22,9 @@ package com.condation.cms.modules.ui.extensionpoints.remotemethods;
  */
 import com.condation.cms.api.Constants;
 import com.condation.cms.api.auth.Permissions;
-import com.condation.cms.api.db.DB;
 import com.condation.cms.api.db.Page;
 import com.condation.cms.api.db.VariantSearchMode;
 import com.condation.cms.api.eventbus.events.ReIndexContentMetaDataEvent;
-import com.condation.cms.api.feature.features.DBFeature;
 import com.condation.cms.api.feature.features.EventBusFeature;
 import com.condation.cms.api.feature.features.WorkflowFeature;
 import com.condation.cms.api.ui.extensions.UIRemoteMethodExtensionPoint;
@@ -63,15 +61,15 @@ public class RemotePageEnpoints extends AbstractRemoteMethodeExtension {
 	}
 
 	@RemoteMethod(name = "pages.search", permissions = {Permissions.CONTENT_EDIT})
-    public Object searchPages (Map<String, Object> parameters) throws RPCException {
+    public Object searchPages (Map<String, Object> parameters) {
 		String query = "";
 
 		if (parameters.get("query") instanceof String stringValue) {
 			query = stringValue;
 		}
 
-		final DB db = getContext().get(DBFeature.class).db();
-		var hits = db.getContent().searchByTitle(query, VariantSearchMode.ORIGINAL).stream()
+			var hits = getContentRepository(parameters).query()
+					.searchByTitle(query).variants(VariantSearchMode.ORIGINAL).get().stream()
 				.map(node -> {
 					String url = node.url();
 					String previewUrl = HTTPUtil.modifyUrl(url, context);
@@ -94,9 +92,7 @@ public class RemotePageEnpoints extends AbstractRemoteMethodeExtension {
 	@RemoteMethod(name = "pages.filter", permissions = {Permissions.CONTENT_EDIT})
     public Object filterPages (Map<String, Object> parameters) throws RPCException {
         
-        final DB db = getDB(parameters);
-        
-        var query = db.getContent().query((node, length) -> node);
+		var query = getContentRepository(parameters).query();
         
         if (parameters.containsKey("contentType") && parameters.get("contentType") != null) {
             query.contentType(parameters.get("contentType").toString());
@@ -142,13 +138,9 @@ public class RemotePageEnpoints extends AbstractRemoteMethodeExtension {
 		
         var pageList = query.page(page, size);
 		
-		var contentBase = db.getFileSystem().contentBase();
 		return new Page<>(pageList.getTotalItems(), pageList.getPageSize(), pageList.getTotalPages(), pageList.getPage(), 
 				pageList.getItems().stream().map(node -> {
-					var temp_path = contentBase.resolve(node.uri());
-					var url = PathUtil.toURL(temp_path, contentBase);
-					
-					url = HTTPUtil.modifyUrl(url, context);
+					var url = HTTPUtil.modifyUrl(node.url(), context);
 					
 					return new NodeDTO(url, node.data());
 				}).toList()
@@ -157,30 +149,29 @@ public class RemotePageEnpoints extends AbstractRemoteMethodeExtension {
     
 	@RemoteMethod(name = "page.delete", permissions = {Permissions.CONTENT_EDIT})
 	public Object deletePage(Map<String, Object> parameters) throws RPCException {
-		final DB db = getDB(parameters);
+			var repository = getMutableContentRepository(parameters);
 
 		Map<String, Object> result = new HashMap<>();
 
 		try {
 			var uri = (String) parameters.getOrDefault("uri", "");
 			var name = (String) parameters.getOrDefault("name", "");
-			var contentBase = db.getFileSystem().contentBase();
 
 			if (Strings.isNullOrEmpty(name)) {
 				throw new RPCException(0, "filename can not be null");
 			}
 			
-			var contentFile = contentBase.resolve(uri).resolve(name);
-
-			log.debug("deleting file {}", contentFile.uri());
-			var sections = db.getContent().listSectionEntries(contentFile);
-			Files.deleteIfExists(db.getFileSystem().resolve(Constants.Folders.CONTENT).resolve(uri).resolve(name));
-			sections.forEach(node -> {
-				try {
-					log.debug("deleting section {}", node.uri());
-					FileUtils.deleteFolder(db.getFileSystem().resolve(node.uri()));
+				var path = uri.isBlank() ? name : uri + Constants.PATH_SEPARATOR + name;
+				log.debug("deleting content {}", path);
+				var node = repository.get(path);
+				var sections = node.isPresent() ? repository.sections(node.get()) : java.util.List.<com.condation.cms.api.repository.Section>of();
+				repository.delete(path);
+				sections.forEach(section -> {
+					try {
+						log.debug("deleting section {}", section.id());
+						repository.deleteRecursively(section.id());
 				} catch (IOException ioe) {
-					log.error("error deleting file {}", node.uri(), ioe);
+						log.error("error deleting section {}", section.id(), ioe);
 				}
 			});
 		} catch (Exception e) {
@@ -193,7 +184,7 @@ public class RemotePageEnpoints extends AbstractRemoteMethodeExtension {
 
 	@RemoteMethod(name = "page.create", permissions = {Permissions.CONTENT_EDIT})
 	public Object createPage(Map<String, Object> parameters) throws RPCException {
-		final DB db = getDB(parameters);
+			var repository = getMutableContentRepository(parameters);
 
 		Map<String, Object> result = new HashMap<>();
 
@@ -204,8 +195,6 @@ public class RemotePageEnpoints extends AbstractRemoteMethodeExtension {
 			if (Strings.isNullOrEmpty(name)) {
 				throw new RPCException(1, "name must not be empty");
 			}
-			
-			var contentBase = db.getFileSystem().resolve(Constants.Folders.CONTENT);
 			
 			var contentType = (String) parameters.getOrDefault("contentType", "");
 			
@@ -224,31 +213,17 @@ public class RemotePageEnpoints extends AbstractRemoteMethodeExtension {
 
 			name = UIPathUtil.toValidFilename(name);
 			
-			Path newFile = null;
-			if (name.endsWith(".md")) {
-				newFile = contentBase.resolve(uri).resolve(name);
-			} else {
-				newFile = contentBase.resolve(uri).resolve(name).resolve("index.md");
-			}
-			
-			
-			if (newFile.isAbsolute()) {
-				throw new RPCException(1, "absolut path is not supported");
-			} else if (Files.exists(newFile)) {
-				throw new RPCException(1, "directory already exists");
-			} else if (!UIPathUtil.isChild(contentBase, newFile)) {
-				throw new RPCException(1, "invalid path");
-			}
-			Files.createDirectories(newFile.getParent());
-			Files.createFile(newFile);
-			var newURI = PathUtil.toRelativeFile(newFile, contentBase);
-			getContext().get(EventBusFeature.class).eventBus()
-					.syncPublish(new ReIndexContentMetaDataEvent(newURI));
-
-			YamlHeaderUpdater.saveMarkdownFileWithHeader(newFile, meta, "");
-			
-			String url = PathUtil.toURL(newFile, contentBase);
-			result.put("uri", url);
+				String newFile;
+				if (name.endsWith(".md")) {
+					newFile = uri.isBlank() ? name : uri + "/" + name;
+				} else {
+					newFile = (uri.isBlank() ? name : uri + "/" + name) + "/index.md";
+				}
+				if (repository.resourceExists(newFile)) {
+					throw new RPCException(1, "directory already exists");
+				}
+				repository.save(newFile, meta, "");
+				result.put("uri", repository.get(newFile).map(node -> node.url()).orElse(newFile));
 		} catch (Exception e) {
 			log.error("", e);
 			throw new RPCException(0, e.getMessage());

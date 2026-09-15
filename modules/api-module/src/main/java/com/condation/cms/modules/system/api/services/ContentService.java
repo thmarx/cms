@@ -22,9 +22,7 @@ package com.condation.cms.modules.system.api.services;
  */
 
 import com.condation.cms.api.db.ContentNode;
-import com.condation.cms.api.db.DB;
-import com.condation.cms.api.db.cms.ReadOnlyFile;
-import com.condation.cms.api.utils.PathUtil;
+import com.condation.cms.api.repository.ContentRepository;
 import com.condation.cms.modules.system.api.helpers.NodeHelper;
 import com.condation.cms.modules.system.api.helpers.WhitelistFilter;
 import java.util.HashMap;
@@ -41,7 +39,7 @@ import org.eclipse.jetty.server.Request;
 @RequiredArgsConstructor
 public class ContentService {
 
-	private final DB db;
+	private final ContentRepository contentRepository;
 	private final Set<String> metaWhiteList;
 	
 	public Optional<ApiContentNode> resolve (String uri, Request request) {
@@ -60,33 +58,12 @@ public class ContentService {
 	}
 	
 	private Optional<ContentNode> resolveContentNode(String uri) {
-		var contentBase = db.getFileSystem().contentBase();
-		var contentPath = contentBase.resolve(uri);
-		ReadOnlyFile contentFile = null;
-		if (contentPath.exists() && contentPath.isDirectory()) {
-			// use index.md
-			var tempFile = contentPath.resolve("index.md");
-			if (tempFile.exists()) {
-				contentFile = tempFile;
-			} else {
-				return Optional.empty();
-			}
-		} else {
-			var temp = contentBase.resolve(uri + ".md");
-			if (temp.exists()) {
-				contentFile = temp;
-			} else {
-				return Optional.empty();
-			}
-		}
-		
-		var filePath = PathUtil.toRelativeFile(contentFile, contentBase);
-		if (!db.getContent().isVisible(filePath)) {
+		var requestUrl = uri.startsWith("/") ? uri : "/" + uri;
+		var contentNode = contentRepository.findByUrl(requestUrl)
+				.or(() -> contentRepository.get(uri));
+		if (contentNode.isEmpty() || !contentRepository.isVisible(contentNode.get())) {
 			return Optional.empty();
 		}
-		
-		final ContentNode contentNode = db.getContent().byUri(filePath).get();
-
-		return Optional.ofNullable(contentNode);
+		return contentNode;
 	}
 }

@@ -32,7 +32,7 @@ import com.condation.cms.api.feature.Feature;
  * 
  * @author t.marx
  */
-@FeatureScope({FeatureScope.Scope.GLOBAL, FeatureScope.Scope.MODULE, FeatureScope.Scope.REQUEST})
+@FeatureScope({FeatureScope.Scope.SITE, FeatureScope.Scope.MODULE, FeatureScope.Scope.REQUEST})
 public record ServerPropertiesFeature(ServerProperties serverProperties) implements Feature {
 
 }

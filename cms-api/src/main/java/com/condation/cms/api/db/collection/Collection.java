@@ -24,9 +24,7 @@ package com.condation.cms.api.db.collection;
 import com.condation.cms.api.db.ContentQuery;
 import java.util.Optional;
 
-/**
- * A named, file-backed collection.
- */
+/** A named collection, independent of its persistence backend. */
 public interface Collection {
 
 	String name();

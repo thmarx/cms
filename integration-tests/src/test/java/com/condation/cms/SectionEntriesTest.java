@@ -30,11 +30,14 @@ import com.condation.cms.api.db.ContentNode;
 import com.condation.cms.api.db.cms.ReadOnlyFile;
 import com.condation.cms.api.markdown.MarkdownRenderer;
 import com.condation.cms.api.template.TemplateEngine;
+import com.condation.cms.api.repository.ContentRepository;
 import com.condation.cms.content.DefaultContentParser;
 import com.condation.cms.content.DefaultContentRenderer;
 import com.condation.cms.content.SectionEntry;
 import com.condation.cms.core.eventbus.DefaultEventBus;
 import com.condation.cms.filesystem.FileDB;
+import com.condation.cms.filesystem.FileSystemContentRepository;
+import com.condation.cms.filesystem.FileSystemContentStore;
 import com.condation.cms.filesystem.NIOReadOnlyFile;
 import com.condation.cms.template.TemplateEngineTest;
 import com.condation.cms.test.TestSiteProperties;
@@ -57,6 +60,7 @@ public class SectionEntriesTest extends TemplateEngineTest {
 	static DefaultContentRenderer contentRenderer;
 	static MarkdownRenderer markdownRenderer;
 	static FileDB db;
+	static ContentRepository contentRepository;
 
 	@BeforeAll
 	public static void beforeClass() throws IOException {
@@ -83,21 +87,26 @@ public class SectionEntriesTest extends TemplateEngineTest {
 		db.init();
 		markdownRenderer = TestHelper.getRenderer();
 		TemplateEngine templates = new TestTemplateEngine(db);
+		contentRepository = new FileSystemContentRepository(
+				db.getContent(), db.getFileSystem(),
+				new FileSystemContentStore(db.getFileSystem()), contentParser);
 
-		contentRenderer = new DefaultContentRenderer(contentParser,
-				() -> templates,
+		contentRenderer = new DefaultContentRenderer(() -> templates,
 				db,
 				new TestSiteProperties(Map.of()),
-				new MockModuleManager()
+				new MockModuleManager(),
+				contentRepository,
+				db.getCollectionRepository()
 		);
 	}
 
 	@Test
 	public void test_section_entries() throws IOException {
-		List<ContentNode> listSectionEntries = db.getContent().listSectionEntries(db.getReadOnlyFileSystem().contentBase().resolve("page.md"));
-		Assertions.assertThat(listSectionEntries).hasSize(4);
+		var page = contentRepository.get("page.md").orElseThrow();
+		var sections = contentRepository.sections(page);
+		Assertions.assertThat(sections).hasSize(4);
 
-		Map<String, List<SectionEntry>> renderedSectionEntries = contentRenderer.renderSectionEntries(listSectionEntries, TestHelper.requestContext());
+		Map<String, List<SectionEntry>> renderedSectionEntries = contentRenderer.renderSections(sections, TestHelper.requestContext());
 
 		Assertions.assertThat(renderedSectionEntries)
 				.hasSize(1)

@@ -48,6 +48,11 @@ public abstract class ExtendableQuery<T> implements ContentQuery<T> {
 		context.queryOperations.putAll(queryOperations);
 		return this;
 	}
+
+	@Override
+	public ContentQuery<T> customOperators(Map<String, BiPredicate<Object, Object>> operators) {
+		return addAllCustomOperators(operators);
+	}
 	
 	@Data
 	public static class Context {

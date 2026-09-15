@@ -23,9 +23,11 @@ package com.condation.cms.content;
 import com.condation.cms.api.cache.ICache;
 import com.condation.cms.api.content.ContentParser;
 import com.condation.cms.api.db.cms.ReadOnlyFile;
+import com.condation.cms.api.repository.ContentResource;
 import com.google.common.base.Strings;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.yaml.snakeyaml.Yaml;
@@ -60,22 +62,45 @@ public class DefaultContentParser implements ContentParser {
 	}
 
 	@Override
-	public Content parse(final ReadOnlyFile contentFile) throws IOException {
-        
-        if (contentCache != null && contentCache.contains(contentFile.relativePath())) {
-            return contentCache.get(contentFile.relativePath());
-        }
-        
-		ContentRecord readContent = readContent(contentFile);
+	public Content parse(final ContentResource contentResource) throws IOException {
+		return parse(contentResource.path(), contentResource.content());
+	}
 
+	@Override
+	public Map<String, Object> parseMeta(final ContentResource contentResource) throws IOException {
+		return _parseMeta(readContent(contentResource.content()));
+	}
+
+	/**
+	 * @deprecated use {@link #parse(ContentResource)} instead
+	 */
+	@Override
+	@Deprecated(since = "8.4.0", forRemoval = false)
+	public Content parse(final ReadOnlyFile contentFile) throws IOException {
+		if (contentCache != null && contentCache.contains(contentFile.relativePath())) {
+			return contentCache.get(contentFile.relativePath());
+		}
+
+		var readContent = readContent(contentFile.getAllLines());
 		var content = new Content(readContent.content(), _parseMeta(readContent));
-	
-        if (contentCache != null) {
-            contentCache.put(contentFile.uri(), content);
-        }
-        
-        return content;
+		if (contentCache != null) {
+			contentCache.put(contentFile.uri(), content);
+		}
+		return content;
     }
+
+	private Content parse(String cacheKey, String rawContent) {
+		if (contentCache != null && contentCache.contains(cacheKey)) {
+			return contentCache.get(cacheKey);
+		}
+
+		ContentRecord readContent = readContent(rawContent);
+		var content = new Content(readContent.content(), _parseMeta(readContent));
+		if (contentCache != null) {
+			contentCache.put(cacheKey, content);
+		}
+		return content;
+	}
 
 	private Map<String, Object> _parseMeta(ContentRecord content) {
 		if (Strings.isNullOrEmpty(content.meta().trim())) {
@@ -89,15 +114,22 @@ public class DefaultContentParser implements ContentParser {
 		}
 	}
 
+	/**
+	 * @deprecated use {@link #parseMeta(ContentResource)} instead
+	 */
 	@Override
+	@Deprecated(since = "8.4.0", forRemoval = false)
 	public Map<String, Object> parseMeta(final ReadOnlyFile contentFile) throws IOException {
-		ContentRecord readContent = readContent(contentFile);
+		ContentRecord readContent = readContent(contentFile.getAllLines());
 
 		return _parseMeta(readContent);
 	}
 
-	private ContentRecord readContent(final ReadOnlyFile contentFile) throws IOException {
-		var fileContent = contentFile.getAllLines();
+	private ContentRecord readContent(final String rawContent) {
+		return readContent(rawContent.lines().toList());
+	}
+
+	private ContentRecord readContent(final List<String> fileContent) {
 
 		StringBuilder contentBuilder = new StringBuilder();
 		StringBuilder metaBuilder = new StringBuilder();

@@ -1,38 +1,13 @@
 ---
-title: Startpage
 template: start.html
-search:
-  index: false
-status: published
-description: Thats awesome 1234
 parent:
   text: another text for the meta attribute , seems to work
-count: 20
-background_color: '#c2e0c6'
 range_test: 42
 choose_color: green
-unpublish_date: null
-publish_date: null
-features:
-- export
-checked:
-- farbe
-selected: form
 radioed: form
-media_url: images/fff.png
-object:
-  values:
-  - title: Test 1 and more
-    description: desc 1 - 2
-  - title: Test 2 update
-  - title: test
-    description: blub
-    features: search
-seo:
-  description: hier kommt die beschreibung
-linked_page: /about
-translations:
-  de: /
+author: thorsten
+count: 20
+description: Thats awesome
 taxonomy:
   tags:
   - kleidung
@@ -41,7 +16,32 @@ taxonomy:
   - kinderkleidung
   - Small Test
   - New tag
-author: thorsten
+title: Startpage
+media_url: images/fff.png
+features:
+- export
+search:
+  index: false
+background_color: '#c2e0c6'
+translations:
+  de: /
+checked:
+- farbe
+unpublish_date: null
+seo:
+  description: hier kommt die beschreibung
+linked_page: /about
+publish_date: null
+selected: form
+status: published
+object:
+  values:
+  - title: Test 1 and more
+    description: desc 1 - 2
+  - title: Test 2 update
+  - title: test
+    description: blub
+    features: search
 ---
 
 # Demo Project
@@ -50,7 +50,7 @@ author: thorsten
 
 That's a demo page with some extra features to show the manager application!
 
-Hello world!
+Hello world 2!
 
 Here some content!
 

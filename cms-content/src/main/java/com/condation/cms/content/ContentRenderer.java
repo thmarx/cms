@@ -24,17 +24,16 @@ package com.condation.cms.content;
 import com.condation.cms.api.db.ContentNode;
 import com.condation.cms.api.db.Page;
 import com.condation.cms.api.db.collection.CollectionItem;
-import com.condation.cms.api.db.cms.ReadOnlyFile;
 import com.condation.cms.api.db.taxonomy.Taxonomy;
 import com.condation.cms.api.model.ListNode;
 import com.condation.cms.api.request.RequestContext;
-import com.condation.cms.api.template.TemplateEngine;
+import com.condation.cms.api.repository.ContentDocument;
+import com.condation.cms.api.repository.Section;
 import com.condation.cms.content.views.model.View;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Consumer;
 
 /**
  *
@@ -42,23 +41,26 @@ import java.util.function.Consumer;
  */
 public interface ContentRenderer {
 
-	String render(final ReadOnlyFile contentFile, final RequestContext context) throws IOException;
+	String render(final ContentDocument document, final RequestContext context,
+			final Map<String, List<SectionEntry>> sectionEntries) throws IOException;
 
-	String render(final ReadOnlyFile contentFile, final RequestContext context, final Map<String, List<SectionEntry>> sectionEntries) throws IOException;
-
-	String render(final ReadOnlyFile contentFile, final RequestContext context, final Map<String, List<SectionEntry>> sectionEntries, final Map<String, Object> meta, final String markdownContent, final Consumer<TemplateEngine.Model> modelExtending) throws IOException;
+	Map<String, List<SectionEntry>> renderSections(
+			final List<Section> sections,
+			final RequestContext context) throws IOException;
 
 	String renderCollection(
-			final ReadOnlyFile collectionFile,
 			final ContentNode collectionNode,
 			final CollectionItem item,
 			final String template,
 			final RequestContext context) throws IOException;
 
-	Map<String, List<SectionEntry>> renderSectionEntries(final List<ContentNode> sectionEntryNodes, final RequestContext context) throws IOException;
+	String renderTaxonomyContent(final Optional<ContentDocument> document,
+			final Taxonomy taxonomy, Optional<String> taxonomyValue,
+			final RequestContext context, final Map<String, Object> meta,
+			final Page<ListNode> page,
+			Map<String, List<SectionEntry>> sectionEntries) throws IOException;
 
-	String renderTaxonomy(final Optional<ReadOnlyFile> contentFileOpt, final Taxonomy taxonomy, Optional<String> taxonomyValue, final RequestContext context, final Map<String, Object> meta, final Page<ListNode> page, Map<String, List<SectionEntry>> sectionEntries) throws IOException;
+	String renderView(final ContentDocument document, final View view,
+			final RequestContext requestContext, final Page<ListNode> page) throws IOException;
 
-	String renderView(final ReadOnlyFile viewFile, final View view, final ContentNode contentNode, final RequestContext requestContext, final Page<ListNode> page) throws IOException;
-	
 }

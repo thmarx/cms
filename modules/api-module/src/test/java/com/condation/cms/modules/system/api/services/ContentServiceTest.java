@@ -31,6 +31,8 @@ import com.condation.cms.api.request.RequestContext;
 import com.condation.cms.content.DefaultContentParser;
 import com.condation.cms.core.eventbus.DefaultEventBus;
 import com.condation.cms.filesystem.FileDB;
+import com.condation.cms.filesystem.FileSystemContentRepository;
+import com.condation.cms.filesystem.FileSystemContentStore;
 import com.condation.cms.filesystem.NIOReadOnlyFile;
 import java.nio.file.Path;
 import java.util.Set;
@@ -79,7 +81,10 @@ public class ContentServiceTest {
 		}, config);
 		db.init();
 		
-		contentService = new ContentService(db, Set.of("title"));
+		var repository = new FileSystemContentRepository(
+				db.getContent(), db.getFileSystem(),
+				new FileSystemContentStore(db.getFileSystem()), contentParser);
+		contentService = new ContentService(repository, Set.of("title"));
 	}
 	
 	@BeforeEach

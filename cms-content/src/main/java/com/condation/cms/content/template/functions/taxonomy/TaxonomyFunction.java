@@ -23,7 +23,7 @@ package com.condation.cms.content.template.functions.taxonomy;
 
 
 import com.condation.cms.api.db.taxonomy.Taxonomy;
-import com.condation.cms.filesystem.FileDB;
+import com.condation.cms.api.db.DB;
 import com.google.inject.Inject;
 import java.util.Collections;
 import java.util.List;
@@ -37,26 +37,26 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor(onConstructor = @__({@Inject}))
 public class TaxonomyFunction {
 	
-	private final FileDB fileDB;
+	private final DB db;
 	
 	public List<Taxonomy> all () {
-		return fileDB.getTaxonomies().all();
+		return db.getTaxonomies().all();
 	}
 	
 	public Taxonomy get (String slug) {
-		return fileDB.getTaxonomies().forSlug(slug).orElse(null);
+		return db.getTaxonomies().forSlug(slug).orElse(null);
 	}
 	
 	public Set<String> values (String slug) {
-		var taxonomy = fileDB.getTaxonomies().forSlug(slug);
+		var taxonomy = db.getTaxonomies().forSlug(slug);
 		if (taxonomy.isEmpty()) {
 			return Collections.emptySet();
 		}
-		return fileDB.getTaxonomies().values(taxonomy.get());
+		return db.getTaxonomies().values(taxonomy.get());
 	}
 	
 	public Set<String> values (Taxonomy taxonomy) {
-		return fileDB.getTaxonomies().values(taxonomy);
+		return db.getTaxonomies().values(taxonomy);
 	}
 	
 	public String url (final String taxonomy, final String value) {
@@ -65,7 +65,7 @@ public class TaxonomyFunction {
 	
 	public String getTitle (final String taxonomy) {
 		
-		var taxo = fileDB.getTaxonomies().forSlug(taxonomy);
+		var taxo = db.getTaxonomies().forSlug(taxonomy);
 		if (taxo.isPresent()) {
 			return taxo.get().getTitle();
 		}
@@ -75,7 +75,7 @@ public class TaxonomyFunction {
 	
 	public String getTitle (final String taxonomy, String value) {
 		
-		var taxo = fileDB.getTaxonomies().forSlug(taxonomy);
+		var taxo = db.getTaxonomies().forSlug(taxonomy);
 		if (taxo.isPresent()) {
 			
 			return taxo.get().getValueTitle(value);

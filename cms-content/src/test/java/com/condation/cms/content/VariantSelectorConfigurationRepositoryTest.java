@@ -25,40 +25,30 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.condation.cms.api.Constants;
 import com.condation.cms.api.db.ContentNode;
-import com.condation.cms.api.db.DB;
-import com.condation.cms.api.db.DBFileSystem;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.List;
+import com.condation.cms.api.repository.ContentRepository;
+import com.condation.cms.api.repository.MutableContentRepository;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import static org.mockito.Mockito.verify;
 
 class VariantSelectorConfigurationRepositoryTest {
-
-	@TempDir
-	Path contentBase;
 
 	private final ContentNode canonical = new ContentNode(
 			"news/about.md", "/news/about", "about.md", Map.of()
 	);
 	private VariantSelectorConfigurationRepository repository;
+	private ContentRepository contentRepository;
+	private MutableContentRepository mutableContentRepository;
 
 	@BeforeEach
 	void setUp() {
-		var db = mock(DB.class);
-		var fileSystem = mock(DBFileSystem.class);
-		var resolver = mock(VariantResolver.class);
-		when(db.getFileSystem()).thenReturn(fileSystem);
-		when(fileSystem.resolve(Constants.Folders.CONTENT)).thenReturn(contentBase);
-		when(resolver.resolveContext(canonical)).thenReturn(
-				new VariantResolver.VariantContext(canonical, Optional.empty(), List.of())
-		);
-		repository = new VariantSelectorConfigurationRepository(db, resolver);
+		contentRepository = mock(ContentRepository.class);
+		mutableContentRepository = mock(MutableContentRepository.class);
+		repository = new VariantSelectorConfigurationRepository(
+				contentRepository, mutableContentRepository);
 	}
 
 	@Test
@@ -69,11 +59,10 @@ class VariantSelectorConfigurationRepositoryTest {
 
 	@Test
 	void storesOneConfigurationAtCanonicalVariantFolder() throws Exception {
+		when(contentRepository.variantSelectorId(canonical)).thenReturn(Optional.of("audience"));
 		repository.setSelectorId(canonical, "audience");
 
-		var file = contentBase.resolve("news/.variants/about/variants.yaml");
-		assertThat(repository.configurationFile(canonical)).isEqualTo(file);
-		assertThat(Files.readString(file)).contains("selector: audience");
+		verify(mutableContentRepository).setVariantSelectorId(canonical, "audience");
 		assertThat(repository.getSelectorId(canonical)).isEqualTo("audience");
 	}
 }

@@ -24,8 +24,8 @@ package com.condation.cms.content;
 import com.condation.cms.api.configuration.configs.CollectionConfiguration;
 import com.condation.cms.api.configuration.configs.CollectionDefinition;
 import com.condation.cms.api.configuration.configs.CollectionDetailConfiguration;
-import com.condation.cms.api.db.DB;
 import com.condation.cms.api.db.collection.CollectionItem;
+import com.condation.cms.api.repository.CollectionRepository;
 import com.condation.cms.content.utils.SlugUtil;
 import java.util.Comparator;
 import java.util.Optional;
@@ -35,7 +35,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class CollectionRouteResolver {
 
-	private final DB db;
+	private final CollectionRepository collectionRepository;
 	private final CollectionConfiguration configuration;
 
 	public Optional<ResolvedRoute> resolve(String requestUri) {
@@ -64,7 +64,7 @@ public class CollectionRouteResolver {
 			return Optional.empty();
 		}
 
-		var collection = db.getCollections().collection(definition.name());
+		var collection = collectionRepository.collection(definition.name());
 		Optional<CollectionItem> item;
 		if (isSimpleParameter(detail.get())) {
 			var routeValue = simpleRouteValue(detail.get(), uri);

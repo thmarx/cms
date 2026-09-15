@@ -32,10 +32,13 @@ import com.condation.cms.api.db.cms.ReadOnlyFile;
 import com.condation.cms.api.mapper.ContentNodeMapper;
 import com.condation.cms.api.markdown.MarkdownRenderer;
 import com.condation.cms.api.model.NavNode;
+import com.condation.cms.api.repository.ContentRepository;
 import com.condation.cms.content.DefaultContentParser;
 import com.condation.cms.content.template.functions.navigation.NavigationFunction;
 import com.condation.cms.core.eventbus.DefaultEventBus;
 import com.condation.cms.filesystem.FileDB;
+import com.condation.cms.filesystem.FileSystemContentRepository;
+import com.condation.cms.filesystem.FileSystemContentStore;
 import com.condation.cms.filesystem.NIOReadOnlyFile;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -55,6 +58,7 @@ public class NavigationFunctionNGTest {
 
 	static NavigationFunction navigationFunction;
 	private static FileDB db;
+	private static ContentRepository contentRepository;
 	static MarkdownRenderer markdownRenderer = TestHelper.getRenderer();
 	static Path hostBase = Path.of("hosts/test/");
 
@@ -80,10 +84,13 @@ public class NavigationFunctionNGTest {
 			}
 		}, config);
 		db.init();
+		contentRepository = new FileSystemContentRepository(
+				db.getContent(), db.getFileSystem(),
+				new FileSystemContentStore(db.getFileSystem()), contentParser);
 		defaultContentParser = new DefaultContentParser();
-		navigationFunction = new NavigationFunction(db, 
-				db.getReadOnlyFileSystem().contentBase().resolve("nav/index.md"),
-				TestHelper.requestContext("/", defaultContentParser, markdownRenderer, new ContentNodeMapper(db, defaultContentParser)));
+		navigationFunction = new NavigationFunction(contentRepository,
+				contentRepository.get("nav/index.md").orElseThrow(),
+				TestHelper.requestContext("/", defaultContentParser, markdownRenderer, new ContentNodeMapper(contentRepository)));
 	}
 	protected static DefaultContentParser defaultContentParser;
 
@@ -128,10 +135,9 @@ public class NavigationFunctionNGTest {
 	@Test
 	public void test_path() throws Exception {
 
-		var sut = new NavigationFunction(db, 
-				db.getReadOnlyFileSystem().contentBase().resolve("nav3/folder1/index.md")
-				, 
-				TestHelper.requestContext("/", defaultContentParser, markdownRenderer, new ContentNodeMapper(db, defaultContentParser)));
+		var sut = new NavigationFunction(contentRepository,
+				contentRepository.get("nav3/folder1/index.md").orElseThrow(),
+				TestHelper.requestContext("/", defaultContentParser, markdownRenderer, new ContentNodeMapper(contentRepository)));
 		
 		List<NavNode> path = sut.path();
 
@@ -143,15 +149,15 @@ public class NavigationFunctionNGTest {
 	
 	@Test
 	public void test_json () throws IOException {
-		var navigationFunction = new NavigationFunction(db, 
-				db.getReadOnlyFileSystem().contentBase().resolve("nav/index.md"),
-				TestHelper.requestContext("/", defaultContentParser, markdownRenderer, new ContentNodeMapper(db, defaultContentParser)));
-		
-		List<NavNode> list = navigationFunction.json().list("/json");
+		var navFunction = new NavigationFunction(contentRepository,
+				contentRepository.get("nav/index.md").orElseThrow(),
+				TestHelper.requestContext("/", defaultContentParser, markdownRenderer, new ContentNodeMapper(contentRepository)));
+
+		List<NavNode> list = navFunction.json().list("/json");
 		Assertions.assertThat(list).hasSize(1);
 		Assertions.assertThat(list.get(0).name()).isEqualTo("JSON");
-		
-		list = navigationFunction.html().list("/json");
+
+		list = navFunction.html().list("/json");
 		Assertions.assertThat(list).hasSize(1);
 		Assertions.assertThat(list.get(0).name()).isEqualTo("HTML");
 	}

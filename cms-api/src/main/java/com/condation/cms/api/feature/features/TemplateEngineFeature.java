@@ -38,7 +38,7 @@ public record TemplateEngineFeature(TemplateEngine templateEngine) implements Fe
 
 	public String render(String template, Map<String, Object> model, RequestContext requestContext) {
 		try {
-			var templateModel = new TemplateEngine.Model(null, null, requestContext);
+			var templateModel = new TemplateEngine.Model(null, requestContext);
 			templateModel.values.putAll(model);
 			return templateEngine.render(template, templateModel);
 		} catch (IOException ioe) {

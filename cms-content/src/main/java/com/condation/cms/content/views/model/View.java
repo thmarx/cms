@@ -21,19 +21,16 @@ package com.condation.cms.content.views.model;
  * #L%
  */
 
-import com.condation.cms.api.content.ContentParser;
-import com.condation.cms.api.db.DB;
+import com.condation.cms.api.db.ContentNode;
 import com.condation.cms.api.db.Page;
-import com.condation.cms.api.markdown.MarkdownRenderer;
 import com.condation.cms.api.model.ListNode;
 import com.condation.cms.api.request.RequestContext;
+import com.condation.cms.api.repository.ContentRepository;
 import com.condation.cms.content.views.NodeResolver;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import lombok.Data;
 import org.graalvm.polyglot.Context;
-import com.condation.cms.api.db.cms.ReadOnlyFile;
 
 /**
  *
@@ -47,14 +44,16 @@ public class View {
 	private String template;
 	private Content content;
 	
-	public Page<ListNode> getNodes (final DB db, final ReadOnlyFile currentNode, final ContentParser contentParser, 
-			final MarkdownRenderer markdownRenderer, final Context context, final Map<String, List<String>> queryParams,
+	public Page<ListNode> getNodes (final ContentRepository contentRepository,
+			final ContentNode currentNode, final Context context, final Map<String, List<String>> queryParams,
 			final RequestContext requestContext) {
 		
 		if (content.getNodelist() != null) {
-			return new NodeResolver(db, currentNode, contentParser, markdownRenderer, context, queryParams).nodelist(this, requestContext);
+			return new NodeResolver(contentRepository, currentNode, context, queryParams)
+					.nodelist(this, requestContext);
 		} else if (content.getQuery() != null) {
-			return new NodeResolver(db, currentNode, contentParser, markdownRenderer, context, queryParams).query(this, requestContext);
+			return new NodeResolver(contentRepository, currentNode, context, queryParams)
+					.query(this, requestContext);
 		}
 		return Page.EMPTY;
 	}

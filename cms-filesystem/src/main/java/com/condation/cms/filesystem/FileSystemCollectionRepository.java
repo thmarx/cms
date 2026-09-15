@@ -26,16 +26,19 @@ import com.condation.cms.api.db.ContentNode;
 import com.condation.cms.api.db.ContentQuery;
 import com.condation.cms.api.db.CursorPage;
 import com.condation.cms.api.db.NodeVisibility;
-import com.condation.cms.api.db.collection.CollectionCursorSupport;
+import com.condation.cms.api.db.collection.Collection;
 import com.condation.cms.api.db.collection.CollectionItem;
 import com.condation.cms.api.db.collection.CollectionItemId;
 import com.condation.cms.api.db.collection.CollectionItemMetadata;
-import com.condation.cms.api.db.collection.Collections;
+import com.condation.cms.api.repository.CollectionAccess;
+import com.condation.cms.api.repository.MutableCollectionRepository;
 import com.condation.cms.api.utils.PathUtil;
 import com.condation.cms.core.content.io.ContentFileParser;
+import com.condation.cms.core.content.io.YamlHeaderUpdater;
 import com.condation.cms.filesystem.metadata.persistent.CollectionMetaData;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -44,7 +47,6 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -53,11 +55,10 @@ import java.util.function.Function;
 import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
 
-/**
- * Site-scoped, file-backed collections implementation.
- */
+/** Site-scoped collection repository backed by Markdown files and a persistent index. */
 @Slf4j
-public class FileCollections implements Collections, CollectionCursorSupport, AutoCloseable {
+public final class FileSystemCollectionRepository
+		implements MutableCollectionRepository, AutoCloseable {
 
 	private static final Pattern COLLECTION_NAME = Pattern.compile("[a-zA-Z0-9][a-zA-Z0-9_-]*");
 	private static final Duration CHANGE_QUIET_PERIOD = Duration.ofMillis(200);
@@ -72,7 +73,7 @@ public class FileCollections implements Collections, CollectionCursorSupport, Au
 	private MultiRootRecursiveWatcher watcher;
 	private ContentChangeCoordinator changeCoordinator;
 
-	public FileCollections(
+	public FileSystemCollectionRepository(
 			String siteId,
 			Path hostBase,
 			Function<Path, Map<String, Object>> metaParser) {
@@ -86,39 +87,38 @@ public class FileCollections implements Collections, CollectionCursorSupport, Au
 		Files.createDirectories(collectionsBase);
 		metaData = new CollectionMetaData(hostBase);
 		metaData.open();
-		changeCoordinator = new ContentChangeCoordinator(
-				CHANGE_QUIET_PERIOD,
-				this::processChanges);
+		changeCoordinator = new ContentChangeCoordinator(CHANGE_QUIET_PERIOD, this::processChanges);
 		rebuild(false);
 
 		watcher = new MultiRootRecursiveWatcher(siteId, List.of(collectionsBase));
-		var publisher = Objects.requireNonNull(
+		var publisher = java.util.Objects.requireNonNull(
 				watcher.getPublisher(collectionsBase),
 				"collections publisher must be available");
-		publisher.subscribe(
-				new MultiRootRecursiveWatcher.AbstractFileEventSubscriber() {
-					@Override
-					public void onNext(FileEvent item) {
-						if (item.type() == FileEvent.Type.OVERFLOW) {
-							changeCoordinator.requestFullResync();
-						} else {
-							changeCoordinator.submit(item.file().toPath());
-						}
-						this.subscription.request(1);
-					}
-				});
+		publisher.subscribe(new MultiRootRecursiveWatcher.AbstractFileEventSubscriber() {
+			@Override
+			public void onNext(FileEvent item) {
+				handleEvent(item);
+				this.subscription.request(1);
+			}
+		});
 		watcher.start();
-	}
-
-	@Override
-	public com.condation.cms.api.db.collection.Collection collection(String name) {
-		validateCollectionName(name);
-		return new FileCollection(name);
 	}
 
 	@Override
 	public Set<String> names() {
 		return Set.copyOf(collectionNames);
+	}
+
+	@Override
+	public CollectionAccess access(String collection) {
+		validateExistingCollection(collection);
+		return CollectionAccess.READ_WRITE;
+	}
+
+	@Override
+	public Collection collection(String name) {
+		validateCollectionName(name);
+		return new FileCollection(name);
 	}
 
 	@Override
@@ -128,16 +128,65 @@ public class FileCollections implements Collections, CollectionCursorSupport, Au
 			long size,
 			Consumer<ContentQuery<CollectionItemMetadata>> queryConfigurer) {
 		validateCollectionName(collection);
-		return metaData.cursorPage(
-				collection,
-				this::mapMetadata,
-				cursor,
-				size,
-				queryConfigurer);
+		return metaData.cursorPage(collection, this::mapMetadata, cursor, size, queryConfigurer);
 	}
 
 	@Override
-	public void refresh(String collection, String id) {
+	public CollectionItem create(
+			String collection,
+			String id,
+			Map<String, Object> metadata,
+			String content) throws IOException {
+		var target = writableItem(collection, id);
+		if (Files.exists(target)) {
+			throw new FileAlreadyExistsException(collection + "/" + id);
+		}
+		write(collection, id, target, metadata, content);
+		return new CollectionItem(id, collection, itemPath(collection, id), content, metadata);
+	}
+
+	@Override
+	public void save(
+			String collection,
+			String id,
+			Map<String, Object> metadata,
+			String content) throws IOException {
+		write(collection, id, writableItem(collection, id), metadata, content);
+	}
+
+	@Override
+	public void delete(String collection, String id) throws IOException {
+		var target = writableItem(collection, id);
+		if (!Files.isRegularFile(target)) {
+			throw new java.nio.file.NoSuchFileException(collection + "/" + id);
+		}
+		Files.delete(target);
+		refresh(collection, id);
+	}
+
+	private void write(
+			String collection,
+			String id,
+			Path target,
+			Map<String, Object> metadata,
+			String content) throws IOException {
+		Files.createDirectories(target.getParent());
+		YamlHeaderUpdater.saveMarkdownFileWithHeader(target, metadata, content);
+		refresh(collection, id);
+	}
+
+	private Path writableItem(String collection, String id) {
+		validateExistingCollection(collection);
+		CollectionItemId.requireValid(id);
+		var root = collectionsBase.toAbsolutePath().normalize();
+		var target = root.resolve(collection).resolve(id + ".md").normalize();
+		if (!target.startsWith(root) || target.equals(root)) {
+			throw new IllegalArgumentException("invalid collection item path");
+		}
+		return target;
+	}
+
+	void refresh(String collection, String id) {
 		validateCollectionName(collection);
 		CollectionItemId.requireValid(id);
 		var file = collectionsBase.resolve(collection).resolve(id + ".md");
@@ -145,7 +194,7 @@ public class FileCollections implements Collections, CollectionCursorSupport, Au
 			if (Files.isRegularFile(file)) {
 				index(file);
 			} else {
-				metaData.removeFile(collection + "/" + id + ".md");
+				metaData.removeFile(itemPath(collection, id));
 			}
 		} catch (IOException ex) {
 			throw new IllegalStateException("could not refresh collection item", ex);
@@ -198,10 +247,7 @@ public class FileCollections implements Collections, CollectionCursorSupport, Au
 			}
 			return;
 		}
-		if (parts.length != 2 || !isValidItemFile(path)) {
-			return;
-		}
-		if (!isValidCollectionName(parts[0])) {
+		if (parts.length != 2 || !isValidItemFile(path) || !isValidCollectionName(parts[0])) {
 			return;
 		}
 		if (Files.isRegularFile(path)) {
@@ -242,7 +288,7 @@ public class FileCollections implements Collections, CollectionCursorSupport, Au
 		var stalePaths = metaData.paths(name);
 		try (var files = Files.list(collection)) {
 			for (var iterator = files.filter(Files::isRegularFile)
-					.filter(FileCollections::isValidItemFile).iterator(); iterator.hasNext();) {
+					.filter(FileSystemCollectionRepository::isValidItemFile).iterator(); iterator.hasNext();) {
 				var file = iterator.next();
 				var path = PathUtil.toRelativeEntry(file, collectionsBase);
 				stalePaths.remove(path);
@@ -265,8 +311,7 @@ public class FileCollections implements Collections, CollectionCursorSupport, Au
 		collectionNames.add(path.substring(0, path.indexOf('/')));
 		var attributes = Files.readAttributes(file, BasicFileAttributes.class);
 		var modified = LocalDate.ofInstant(
-				attributes.lastModifiedTime().toInstant(),
-				ZoneId.systemDefault());
+				attributes.lastModifiedTime().toInstant(), ZoneId.systemDefault());
 		metaData.addFile(path, metaParser.apply(file), modified, stamp);
 	}
 
@@ -282,11 +327,7 @@ public class FileCollections implements Collections, CollectionCursorSupport, Au
 		var filename = path.substring(separator + 1);
 		var id = filename.substring(0, filename.length() - 3);
 		return new CollectionItem(
-				id,
-				collection,
-				path,
-				readMarkdownBody(collectionsBase.resolve(path)),
-				node.data());
+				id, collection, path, readMarkdownBody(collectionsBase.resolve(path)), node.data());
 	}
 
 	private CollectionItemMetadata mapMetadata(ContentNode node, int ignoredExcerptLength) {
@@ -306,16 +347,14 @@ public class FileCollections implements Collections, CollectionCursorSupport, Au
 		}
 	}
 
-	private static boolean isMarkdown(Path file) {
-		return file.getFileName().toString().endsWith(".md");
+	private static boolean isValidItemFile(Path file) {
+		var filename = file.getFileName().toString();
+		return filename.endsWith(".md")
+				&& CollectionItemId.isValid(filename.substring(0, filename.length() - 3));
 	}
 
-	private static boolean isValidItemFile(Path file) {
-		if (!isMarkdown(file)) {
-			return false;
-		}
-		var filename = file.getFileName().toString();
-		return CollectionItemId.isValid(filename.substring(0, filename.length() - 3));
+	private static String itemPath(String collection, String id) {
+		return collection + "/" + id + ".md";
 	}
 
 	private static boolean isValidCollectionName(String name) {
@@ -325,6 +364,13 @@ public class FileCollections implements Collections, CollectionCursorSupport, Au
 	private static void validateCollectionName(String name) {
 		if (!isValidCollectionName(name)) {
 			throw new IllegalArgumentException("invalid collection name: " + name);
+		}
+	}
+
+	private void validateExistingCollection(String collection) {
+		validateCollectionName(collection);
+		if (!collectionNames.contains(collection)) {
+			throw new IllegalArgumentException("collection not found: " + collection);
 		}
 	}
 
@@ -341,7 +387,7 @@ public class FileCollections implements Collections, CollectionCursorSupport, Au
 		}
 	}
 
-	private class FileCollection implements com.condation.cms.api.db.collection.Collection {
+	private class FileCollection implements Collection {
 
 		private final String name;
 
@@ -357,19 +403,19 @@ public class FileCollections implements Collections, CollectionCursorSupport, Au
 		@Override
 		public Optional<CollectionItem> item(String id) {
 			CollectionItemId.requireValid(id);
-			return metaData.byPath(name + "/" + id + ".md")
+			return metaData.byPath(itemPath(name, id))
 					.filter(NodeVisibility::isVisible)
-					.map(node -> FileCollections.this.map(node, 0));
+					.map(node -> FileSystemCollectionRepository.this.map(node, 0));
 		}
 
 		@Override
 		public ContentQuery<CollectionItem> query() {
-			return metaData.query(name, FileCollections.this::map);
+			return metaData.query(name, FileSystemCollectionRepository.this::map);
 		}
 
 		@Override
 		public ContentQuery<CollectionItemMetadata> metadataQuery() {
-			return metaData.query(name, FileCollections.this::mapMetadata);
+			return metaData.query(name, FileSystemCollectionRepository.this::mapMetadata);
 		}
 	}
 }

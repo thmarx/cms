@@ -34,8 +34,11 @@ import com.condation.cms.api.configuration.configs.SiteConfiguration;
 import com.condation.cms.api.db.cms.ReadOnlyFile;
 import com.condation.cms.api.markdown.MarkdownRenderer;
 import com.condation.cms.api.template.TemplateEngine;
+import com.condation.cms.api.repository.ContentRepository;
 import com.condation.cms.core.eventbus.DefaultEventBus;
 import com.condation.cms.filesystem.FileDB;
+import com.condation.cms.filesystem.FileSystemContentRepository;
+import com.condation.cms.filesystem.FileSystemContentStore;
 import com.condation.cms.filesystem.NIOReadOnlyFile;
 import com.condation.cms.template.TemplateEngineTest;
 import com.condation.cms.test.TestSiteProperties;
@@ -63,6 +66,7 @@ public class ContentRendererNGTest extends TemplateEngineTest {
 	
 	static ModuleManager moduleManager = new MockModuleManager();
 	static FileDB db;
+	static ContentRepository contentRepository;
 	static Path hostBase;
 	
 	@BeforeAll
@@ -89,12 +93,16 @@ public class ContentRendererNGTest extends TemplateEngineTest {
 		db.init();
 		markdownRenderer = TestHelper.getRenderer();
 		TemplateEngine templates = new TestTemplateEngine(db);
+		contentRepository = new FileSystemContentRepository(
+				db.getContent(), db.getFileSystem(),
+				new FileSystemContentStore(db.getFileSystem()), contentParser);
 		
-		contentRenderer = new DefaultContentRenderer(contentParser, 
-				() -> templates, 
+		contentRenderer = new DefaultContentRenderer(() -> templates,
 				db, 
 				new TestSiteProperties(Map.of()), 
-				moduleManager);
+				moduleManager,
+				contentRepository,
+				db.getCollectionRepository());
 	}
 	@AfterAll
 	public static void shutdown () throws Exception {
@@ -113,8 +121,9 @@ public class ContentRendererNGTest extends TemplateEngineTest {
 						</body>
                      </html>
                      """;
-		var content = contentRenderer.render(new NIOReadOnlyFile(Path.of("hosts/test/content/test.md"), Path.of("hosts/test/"))
-				, TestHelper.requestContext());
+		var content = contentRenderer.render(
+				contentRepository.load(contentRepository.get("test.md").orElseThrow()).orElseThrow(),
+				TestHelper.requestContext(), Map.of());
 		
 		Assertions.assertThat(content).isEqualToIgnoringWhitespace(expectedHTML);
 	}
@@ -131,8 +140,9 @@ public class ContentRendererNGTest extends TemplateEngineTest {
                      	</body>
                      </html>
                      """;
-		var content = contentRenderer.render(new NIOReadOnlyFile(Path.of("hosts/test/content/products/test.md"), Path.of("hosts/test/"))
-				, TestHelper.requestContext());
+		var content = contentRenderer.render(
+				contentRepository.load(contentRepository.get("products/test.md").orElseThrow()).orElseThrow(),
+				TestHelper.requestContext(), Map.of());
 		
 		Assertions.assertThat(content).isEqualToIgnoringWhitespace(expectedHTML);
 	}

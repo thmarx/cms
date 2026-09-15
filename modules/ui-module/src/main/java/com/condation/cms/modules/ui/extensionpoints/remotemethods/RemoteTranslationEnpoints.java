@@ -24,10 +24,8 @@ import com.condation.cms.api.Constants;
 import com.condation.cms.api.SiteProperties;
 import com.condation.cms.api.auth.Permissions;
 import com.condation.cms.api.configuration.configs.SiteConfiguration;
-import com.condation.cms.api.db.DB;
 import com.condation.cms.api.eventbus.events.ReIndexContentMetaDataEvent;
 import com.condation.cms.api.feature.features.ConfigurationFeature;
-import com.condation.cms.api.feature.features.DBFeature;
 import com.condation.cms.api.feature.features.EventBusFeature;
 import com.condation.cms.api.ui.extensions.UIRemoteMethodExtensionPoint;
 import com.condation.modules.api.annotation.Extension;
@@ -59,15 +57,13 @@ public class RemoteTranslationEnpoints extends AbstractRemoteMethodeExtension {
 
 	@RemoteMethod(name = "translations.get", permissions = {Permissions.CONTENT_EDIT})
 	public Object get(Map<String, Object> parameters) throws RPCException {
-		final DB db = getDB(parameters);
-
 		Map<String, Object> result = new HashMap<>();
 		List<TranslationDto> translations = new ArrayList<>();
 		result.put("translations", translations);
 
 		var uri = (String) parameters.getOrDefault("uri", "");
 
-		var contentNodeOpt = db.getContent().byUri(uri);
+		var contentNodeOpt = getContentRepository(parameters).get(uri);
 		var contentNode = contentNodeOpt.orElseThrow(() -> new RPCException("content node for uri %s not found".formatted(uri)));
 
 		var siteProperties = getContext().get(ConfigurationFeature.class).configuration().get(SiteConfiguration.class).siteProperties();
@@ -96,30 +92,25 @@ public class RemoteTranslationEnpoints extends AbstractRemoteMethodeExtension {
 
 	@RemoteMethod(name = "translations.remove", permissions = {Permissions.CONTENT_EDIT})
 	public Object remove(Map<String, Object> parameters) throws RPCException {
-		final DB db = getContext().get(DBFeature.class).db();
-		var contentBase = db.getFileSystem().contentBase();
+		var repository = getMutableContentRepository(parameters);
 
 		var uri = (String) parameters.get("uri");
 		var language = (String) parameters.get("language");
 
-		var contentFile = contentBase.resolve(uri);
-
 		Map<String, Object> result = new HashMap<>();
 		result.put("uri", uri);
-		if (contentFile != null) {
+		var node = repository.get(uri);
+		if (node.isPresent()) {
 			try {
-				ContentFileParser parser = new ContentFileParser(contentFile);
-
-				Map<String, Object> meta = parser.getHeader();
+				var document = repository.load(node.get()).orElseThrow();
+				Map<String, Object> meta = new HashMap<>(node.get().data());
 				if (meta.containsKey("translations")) {
 					var translations = (Map<String, Object>) meta.get("translations");
 					if (!translations.containsKey(language)) {
 						return result;
 					}
 					var oldTranslationUri = (String)translations.remove(language);
-					var filePath = db.getFileSystem().resolve(Constants.Folders.CONTENT).resolve(uri);
-
-					YamlHeaderUpdater.saveMarkdownFileWithHeader(filePath, meta, parser.getContent());
+					repository.save(uri, meta, document.content());
 					log.debug("file {} saved", uri);
 
 					getContext().get(EventBusFeature.class).eventBus().publish(new ReIndexContentMetaDataEvent(uri));
@@ -151,29 +142,24 @@ public class RemoteTranslationEnpoints extends AbstractRemoteMethodeExtension {
 
 	@RemoteMethod(name = "translations.add", permissions = {Permissions.CONTENT_EDIT})
 	public Object add(Map<String, Object> parameters) throws RPCException {
-		final DB db = getContext().get(DBFeature.class).db();
-		var contentBase = db.getFileSystem().contentBase();
+		var repository = getMutableContentRepository(parameters);
 
 		var uri = (String) parameters.get("uri");
 		var language = (String) parameters.get("language");
 		var translation_url = (String) parameters.get("translationUri");
 
-		var contentFile = contentBase.resolve(uri);
-
 		Map<String, Object> result = new HashMap<>();
 		result.put("uri", uri);
-		if (contentFile != null) {
+		var node = repository.get(uri);
+		if (node.isPresent()) {
 			try {
-				ContentFileParser parser = new ContentFileParser(contentFile);
-
-				Map<String, Object> meta = parser.getHeader();
+				var document = repository.load(node.get()).orElseThrow();
+				Map<String, Object> meta = new HashMap<>(node.get().data());
 				var translations = (Map<String, Object>) meta.getOrDefault("translations", new HashMap<>());
 				translations.put(language, translation_url);
 				meta.put("translations", translations);
 
-				var filePath = db.getFileSystem().resolve(Constants.Folders.CONTENT).resolve(uri);
-
-				YamlHeaderUpdater.saveMarkdownFileWithHeader(filePath, meta, parser.getContent());
+				repository.save(uri, meta, document.content());
 				log.debug("file {} saved", uri);
 
 				getContext().get(EventBusFeature.class).eventBus().publish(new ReIndexContentMetaDataEvent(uri));

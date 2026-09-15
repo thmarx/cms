@@ -25,38 +25,41 @@ import com.condation.cms.api.configuration.configs.CollectionConfiguration;
 import com.condation.cms.api.db.ContentQuery;
 import com.condation.cms.api.db.CursorPage;
 import com.condation.cms.api.db.collection.Collection;
-import com.condation.cms.api.db.collection.CollectionCursorSupport;
+import com.condation.cms.api.db.collection.CollectionItem;
 import com.condation.cms.api.db.collection.CollectionItemMetadata;
-import com.condation.cms.api.db.collection.Collections;
+import com.condation.cms.api.repository.CollectionAccess;
+import com.condation.cms.api.repository.CollectionRepository;
+import com.condation.cms.api.repository.MutableCollectionRepository;
 import com.condation.cms.core.serivce.ServiceRegistry;
-import com.condation.cms.core.serivce.impl.SiteDBService;
+import com.condation.cms.core.serivce.impl.SiteCollectionRepositoryService;
+import java.io.IOException;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 
-/**
- * Adds lazy, read-only collection references to the collections stored by one
- * site. Source sites are looked up for every access so configuration and site
- * reloads do not leave cached cross-site references behind.
- */
-final class ReferencedCollections implements Collections, CollectionCursorSupport {
+/** Adds lazy, read-only cross-site references to a site's local collection repository. */
+final class ReferencedCollectionRepository implements MutableCollectionRepository {
 
 	private final String siteId;
-	private final Collections localCollections;
+	private final MutableCollectionRepository localRepository;
 	private final CollectionConfiguration configuration;
 
-	ReferencedCollections(
+	ReferencedCollectionRepository(
 			String siteId,
-			Collections localCollections,
+			MutableCollectionRepository localRepository,
 			CollectionConfiguration configuration) {
 		this.siteId = siteId;
-		this.localCollections = localCollections;
+		this.localRepository = localRepository;
 		this.configuration = configuration;
 	}
 
 	@Override
 	public Collection collection(String name) {
-		return targetCollections(name).collection(name);
+		var sourceSite = sourceSite(name);
+		return sourceSite == null
+				? localRepository.collection(name)
+				: sourceRepository(sourceSite, name).collection(name);
 	}
 
 	@Override
@@ -65,16 +68,16 @@ final class ReferencedCollections implements Collections, CollectionCursorSuppor
 			String cursor,
 			long size,
 			Consumer<ContentQuery<CollectionItemMetadata>> queryConfigurer) {
-		var target = targetCollections(collection);
-		if (!(target instanceof CollectionCursorSupport cursorSupport)) {
-			throw new UnsupportedOperationException("collection storage does not support cursor paging");
-		}
-		return cursorSupport.metadataCursorPage(collection, cursor, size, queryConfigurer);
+		var sourceSite = sourceSite(collection);
+		return sourceSite == null
+				? localRepository.metadataCursorPage(collection, cursor, size, queryConfigurer)
+				: sourceRepository(sourceSite, collection).metadataCursorPage(
+						collection, cursor, size, queryConfigurer);
 	}
 
 	@Override
 	public Set<String> names() {
-		var names = new HashSet<>(localCollections.names());
+		var names = new HashSet<>(localRepository.names());
 		configuration.collections().values().stream()
 				.filter(definition -> definition.sourceSite()
 						.filter(sourceSite -> !siteId.equals(sourceSite))
@@ -85,17 +88,50 @@ final class ReferencedCollections implements Collections, CollectionCursorSuppor
 	}
 
 	@Override
-	public boolean isLocal(String collection) {
-		return sourceSite(collection) == null;
+	public CollectionAccess access(String collection) {
+		validateCollection(collection);
+		return sourceSite(collection) == null
+				? localRepository.access(collection)
+				: CollectionAccess.READ_ONLY;
 	}
 
 	@Override
-	public void refresh(String collection, String id) {
-		if (!isLocal(collection)) {
+	public CollectionItem create(
+			String collection,
+			String id,
+			Map<String, Object> metadata,
+			String content) throws IOException {
+		ensureWritable(collection);
+		return localRepository.create(collection, id, metadata, content);
+	}
+
+	@Override
+	public void save(
+			String collection,
+			String id,
+			Map<String, Object> metadata,
+			String content) throws IOException {
+		ensureWritable(collection);
+		localRepository.save(collection, id, metadata, content);
+	}
+
+	@Override
+	public void delete(String collection, String id) throws IOException {
+		ensureWritable(collection);
+		localRepository.delete(collection, id);
+	}
+
+	private void ensureWritable(String collection) {
+		if (access(collection) != CollectionAccess.READ_WRITE) {
 			throw new UnsupportedOperationException(
 					"referenced collection is read-only: " + collection);
 		}
-		localCollections.refresh(collection, id);
+	}
+
+	private void validateCollection(String collection) {
+		if (!names().contains(collection)) {
+			throw new IllegalArgumentException("collection not found: " + collection);
+		}
 	}
 
 	private String sourceSite(String collection) {
@@ -105,16 +141,12 @@ final class ReferencedCollections implements Collections, CollectionCursorSuppor
 				.orElse(null);
 	}
 
-	private Collections targetCollections(String collection) {
-		var sourceSite = sourceSite(collection);
-		if (sourceSite == null) {
-			return localCollections;
-		}
-		var source = ServiceRegistry.getInstance().get(sourceSite, SiteDBService.class)
+	private CollectionRepository sourceRepository(String sourceSite, String collection) {
+		var source = ServiceRegistry.getInstance().get(sourceSite, SiteCollectionRepositoryService.class)
 				.orElseThrow(() -> new IllegalStateException(
 						"collection source site is not available: " + sourceSite));
-		var sourceCollections = source.db().getCollections();
-		if (!sourceCollections.isLocal(collection)) {
+		var sourceCollections = source.repository();
+		if (sourceCollections.access(collection) != CollectionAccess.READ_WRITE) {
 			throw new IllegalStateException(
 					"referenced collections must point to a local collection: "
 					+ sourceSite + "/" + collection);

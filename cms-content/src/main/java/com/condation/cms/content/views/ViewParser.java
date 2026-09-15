@@ -22,26 +22,24 @@ package com.condation.cms.content.views;
  */
 
 import com.condation.cms.content.views.model.View;
-import java.io.IOException;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.Constructor;
 import org.yaml.snakeyaml.representer.Representer;
-import com.condation.cms.api.db.cms.ReadOnlyFile;
 /**
  *
  * @author t.marx
  */
 public class ViewParser {
 
-	public static View parse(final ReadOnlyFile viewFile) throws IOException {
+	public static View parse(final String content) {
 		Representer representer = new Representer(new DumperOptions());
 		representer.getPropertyUtils().setSkipMissingProperties(true);
 		LoaderOptions loaderOptions = new LoaderOptions();
 		Constructor constructor = new Constructor(View.class, loaderOptions);
 		Yaml yaml = new Yaml(constructor, representer);
 
-		return yaml.loadAs(viewFile.getContent(), View.class);
+		return yaml.loadAs(content, View.class);
 	}
 }

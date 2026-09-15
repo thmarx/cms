@@ -32,7 +32,7 @@ import lombok.AllArgsConstructor;
  * @author t.marx
  */
 @AllArgsConstructor
-@FeatureScope({FeatureScope.Scope.GLOBAL, FeatureScope.Scope.MODULE, FeatureScope.Scope.REQUEST})
+@FeatureScope({FeatureScope.Scope.SITE, FeatureScope.Scope.MODULE, FeatureScope.Scope.REQUEST})
 public class ThemeFeature implements Feature {
 
 	private Theme theme;

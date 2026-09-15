@@ -38,6 +38,8 @@ import com.condation.cms.api.model.Parameter;
 import com.condation.cms.api.module.SiteModuleContext;
 import com.condation.cms.api.request.RequestContext;
 import com.condation.cms.api.db.ContentNode;
+import com.condation.cms.api.feature.features.RepositoryFeature;
+import com.condation.cms.api.repository.CollectionRepository;
 import com.condation.cms.core.content.io.ContentFileParser;
 import com.condation.cms.core.eventbus.DefaultEventBus;
 import com.condation.cms.filesystem.FileDB;
@@ -84,10 +86,11 @@ class CollectionFunctionsIntegrationTest {
 		createCollectionItems();
 		db = createDatabase();
 		db.init();
-
+		
 		var extension = new CollectionTemplateFunctionExtensions();
 		var moduleContext = new SiteModuleContext();
 		moduleContext.add(DBFeature.class, new DBFeature(db));
+		moduleContext.add(RepositoryFeature.class, new RepositoryFeature(null, db.getCollectionRepository()));
 		extension.setContext(moduleContext);
 
 		collection = (Collection) extension.collection(new Parameter(Map.of("value", COLLECTION_NAME)));

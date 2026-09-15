@@ -1,8 +1,8 @@
-package com.condation.cms.api.db.collection;
+package com.condation.cms.core.serivce.impl;
 
 /*-
  * #%L
- * CMS Api
+ * CMS Core
  * %%
  * Copyright (C) 2023 - 2026 CondationCMS
  * %%
@@ -21,22 +21,12 @@ package com.condation.cms.api.db.collection;
  * #L%
  */
 
-import java.util.Set;
+import com.condation.cms.api.repository.CollectionRepository;
+import com.condation.cms.api.repository.MutableCollectionRepository;
+import com.condation.cms.core.serivce.Service;
 
-/**
- * Site-scoped access to collections.
- */
-public interface Collections {
-
-	Collection collection(String name);
-
-	Set<String> names();
-
-	/** Returns whether a collection is stored by this site and may be modified here. */
-	default boolean isLocal(String collection) {
-		return true;
-	}
-
-	/** Re-indexes one item after a synchronous manager write, or removes a deleted item from the index. */
-	void refresh(String collection, String id);
+/** Exposes a site's collection boundary exclusively to cross-site callers. */
+public record SiteCollectionRepositoryService(
+		CollectionRepository repository,
+		MutableCollectionRepository mutableRepository) implements Service {
 }

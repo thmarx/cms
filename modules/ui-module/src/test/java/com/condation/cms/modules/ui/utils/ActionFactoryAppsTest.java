@@ -24,8 +24,11 @@ package com.condation.cms.modules.ui.utils;
 import com.condation.cms.api.SiteProperties;
 import com.condation.cms.api.auth.Permissions;
 import com.condation.cms.api.db.DB;
-import com.condation.cms.api.db.collection.Collections;
 import com.condation.cms.api.feature.features.DBFeature;
+import com.condation.cms.api.feature.features.InjectorFeature;
+import com.condation.cms.api.feature.features.RepositoryFeature;
+import com.condation.cms.api.repository.CollectionAccess;
+import com.condation.cms.api.repository.CollectionRepository;
 import com.condation.cms.api.feature.features.SitePropertiesFeature;
 import com.condation.cms.api.hooks.HookSystem;
 import com.condation.cms.api.module.SiteModuleContext;
@@ -37,6 +40,7 @@ import com.condation.cms.api.ui.elements.ContentTypes;
 import com.condation.cms.api.ui.extensions.UIActionsExtensionPoint;
 import com.condation.cms.auth.services.User;
 import com.condation.modules.api.ModuleManager;
+import com.google.inject.Injector;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -164,12 +168,11 @@ class ActionFactoryAppsTest {
 		SiteModuleContext context = mock(SiteModuleContext.class);
 		when(context.get(SitePropertiesFeature.class))
 				.thenReturn(new SitePropertiesFeature(siteProperties));
-		DB db = mock(DB.class);
-		Collections collections = mock(Collections.class);
-		when(context.get(DBFeature.class)).thenReturn(new DBFeature(db));
-		when(db.getCollections()).thenReturn(collections);
+		CollectionRepository collections = mock(CollectionRepository.class);
+		when(context.get(RepositoryFeature.class)).thenReturn(new RepositoryFeature(
+				mock(com.condation.cms.api.repository.ContentRepository.class), collections));
 		when(collections.names()).thenReturn(Set.of("blog", "shared"));
-		when(collections.isLocal("blog")).thenReturn(true);
+		when(collections.access("blog")).thenReturn(CollectionAccess.READ_WRITE);
 
 		HookSystem hookSystem = mock(HookSystem.class);
 		when(hookSystem.doFilter(eq(UIHooks.HOOK_REGISTER_CONTENT_TYPES), any(ContentTypes.class)))

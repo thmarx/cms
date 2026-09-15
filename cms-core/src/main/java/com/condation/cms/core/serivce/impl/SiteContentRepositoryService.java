@@ -1,8 +1,8 @@
-package com.condation.cms.api.db.collection;
+package com.condation.cms.core.serivce.impl;
 
 /*-
  * #%L
- * CMS Api
+ * CMS Core
  * %%
  * Copyright (C) 2023 - 2026 CondationCMS
  * %%
@@ -21,20 +21,12 @@ package com.condation.cms.api.db.collection;
  * #L%
  */
 
-import com.condation.cms.api.db.ContentQuery;
-import com.condation.cms.api.db.CursorPage;
-import java.util.function.Consumer;
+import com.condation.cms.api.repository.ContentRepository;
+import com.condation.cms.api.repository.MutableContentRepository;
+import com.condation.cms.core.serivce.Service;
 
-/**
- * Internal capability for infrastructure that needs cursor-based collection
- * traversal. It is deliberately separate from {@link Collection} and
- * {@link ContentQuery}, which are exposed to templates.
- */
-public interface CollectionCursorSupport {
-
-	CursorPage<CollectionItemMetadata> metadataCursorPage(
-			String collection,
-			String cursor,
-			long size,
-			Consumer<ContentQuery<CollectionItemMetadata>> queryConfigurer);
+/** Exposes a site's content boundary exclusively to cross-site callers. */
+public record SiteContentRepositoryService(
+		ContentRepository repository,
+		MutableContentRepository mutableRepository) implements Service {
 }

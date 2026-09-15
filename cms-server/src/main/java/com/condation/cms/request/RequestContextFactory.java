@@ -37,6 +37,7 @@ import com.condation.cms.api.feature.features.InjectorFeature;
 import com.condation.cms.api.feature.features.IsDevModeFeature;
 import com.condation.cms.api.feature.features.MarkdownRendererFeature;
 import com.condation.cms.api.feature.features.RequestFeature;
+import com.condation.cms.api.feature.features.RepositoryFeature;
 import com.condation.cms.api.feature.features.ServerPropertiesFeature;
 import com.condation.cms.api.feature.features.SiteMediaServiceFeature;
 import com.condation.cms.api.feature.features.SitePropertiesFeature;
@@ -51,6 +52,8 @@ import com.condation.cms.api.media.MediaService;
 import com.condation.cms.api.model.Parameter;
 import com.condation.cms.api.workflow.WFStatusProvider;
 import com.condation.cms.api.request.RequestContext;
+import com.condation.cms.api.repository.CollectionRepository;
+import com.condation.cms.api.repository.ContentRepository;
 import com.condation.cms.api.template.TemplateEngine;
 import com.condation.cms.api.theme.Theme;
 import com.condation.cms.api.utils.HTTPUtil;
@@ -95,6 +98,7 @@ public class RequestContextFactory {
 		var siteMediaService = injector.getInstance(MediaService.class);
 
 		requestContext.add(InjectorFeature.class, new InjectorFeature(injector));
+		addRepositories(requestContext);
 
 		requestContext.add(ThemeFeature.class, new ThemeFeature(theme));
 		requestContext.add(ContentParserFeature.class, new ContentParserFeature(injector.getInstance(ContentParser.class)));
@@ -187,6 +191,7 @@ public class RequestContextFactory {
 
 		var requestContext = new RequestContext();
 		requestContext.add(InjectorFeature.class, new InjectorFeature(injector));
+		addRepositories(requestContext);
 
 		requestContext.add(ThemeFeature.class, new ThemeFeature(theme));
 		requestContext.add(ContentParserFeature.class, new ContentParserFeature(injector.getInstance(ContentParser.class)));
@@ -223,6 +228,12 @@ public class RequestContextFactory {
 		requestContext.add(RequestExtensions.class, requestExtensions);
 
 		return requestContext;
+	}
+
+	private void addRepositories(RequestContext requestContext) {
+		requestContext.add(RepositoryFeature.class, new RepositoryFeature(
+				injector.getInstance(ContentRepository.class),
+				injector.getInstance(CollectionRepository.class)));
 	}
 
 	// used

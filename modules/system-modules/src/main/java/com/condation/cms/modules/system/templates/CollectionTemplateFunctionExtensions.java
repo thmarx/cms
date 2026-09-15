@@ -23,7 +23,7 @@ package com.condation.cms.modules.system.templates;
 
 import com.condation.cms.api.annotations.TemplateFunction;
 import com.condation.cms.api.extensions.RegisterTemplateFunctionExtensionPoint;
-import com.condation.cms.api.feature.features.DBFeature;
+import com.condation.cms.api.feature.features.RepositoryFeature;
 import com.condation.cms.api.model.Parameter;
 import com.condation.modules.api.annotation.Extension;
 
@@ -39,6 +39,8 @@ public class CollectionTemplateFunctionExtensions extends RegisterTemplateFuncti
 		if (value == null) {
 			throw new IllegalArgumentException("collection name must not be null");
 		}
-		return context.get(DBFeature.class).db().getCollections().collection(value.toString());
+		return context.get(RepositoryFeature.class)
+				.collectionRepository()
+				.collection(value.toString());
 	}
 }

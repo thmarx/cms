@@ -31,10 +31,13 @@ import com.condation.cms.api.configuration.configs.SiteConfiguration;
 import com.condation.cms.api.db.cms.ReadOnlyFile;
 import com.condation.cms.api.mapper.ContentNodeMapper;
 import com.condation.cms.api.markdown.MarkdownRenderer;
+import com.condation.cms.api.repository.ContentRepository;
 import com.condation.cms.content.DefaultContentParser;
 import com.condation.cms.content.template.functions.query.QueryFunction;
 import com.condation.cms.core.eventbus.DefaultEventBus;
 import com.condation.cms.filesystem.FileDB;
+import com.condation.cms.filesystem.FileSystemContentRepository;
+import com.condation.cms.filesystem.FileSystemContentStore;
 import com.condation.cms.filesystem.NIOReadOnlyFile;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -52,6 +55,7 @@ public class QueryFunctionTest {
 
 	static QueryFunction query;
 	private static FileDB db;
+	private static ContentRepository contentRepository;
 	static MarkdownRenderer markdownRenderer = TestHelper.getRenderer();
 
 	@AfterAll
@@ -79,10 +83,13 @@ public class QueryFunctionTest {
 			}
 		}, config);
 		db.init();
+		contentRepository = new FileSystemContentRepository(
+				db.getContent(), db.getFileSystem(),
+				new FileSystemContentStore(db.getFileSystem()), contentParser);
 		defaultContentParser = new DefaultContentParser();
-		query = new QueryFunction(db, 
-				new NIOReadOnlyFile(Path.of("hosts/test/content/nav/index.md"), hostBase), 
-				TestHelper.requestContext("/", defaultContentParser, markdownRenderer, new ContentNodeMapper(db, defaultContentParser)));
+		query = new QueryFunction(contentRepository,
+				contentRepository.get("nav/index.md").orElseThrow(),
+				TestHelper.requestContext("/", defaultContentParser, markdownRenderer, new ContentNodeMapper(contentRepository)));
 	}
 	protected static DefaultContentParser defaultContentParser;
 

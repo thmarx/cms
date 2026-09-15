@@ -29,7 +29,7 @@ import com.condation.cms.api.workflow.Workflow;
  *
  * @author thorstenmarx
  */
-@FeatureScope({FeatureScope.Scope.GLOBAL, FeatureScope.Scope.MODULE, FeatureScope.Scope.REQUEST})
+@FeatureScope({FeatureScope.Scope.SITE, FeatureScope.Scope.MODULE, FeatureScope.Scope.REQUEST})
 public record WorkflowFeature(Workflow workflow) implements Feature {
 	
 }
